@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>{{ .Title }}</title>
+        <style>
+            .gh_form {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 1px 1px 6px #888;
+                transform: translate(-50%, -50%);
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }
+            .gh_str_logo {
+                font-size: 24px;
+                text-align: center;
+                padding-bottom: 20px;
+            }
+            .gh_inp_text {
+                width: 264px;
+                padding: 18px 18px;
+                border: 0px solid transparent;
+                box-shadow: inset 1px 1px 3px #888;
+                font-size: 16px;
+            }
+            .gh_a_small {
+                font-size: 14px;
+                color: black;
+                text-decoration: underline;
+            }
+            .gh_a_button {
+                display: block;
+                width: 264px;
+                padding: 18px 18px;
+                box-shadow: 1px 1px 3px #888;
+                line-height: 20px;
+                font-size: 16px;
+                text-decoration: none;
+                color: black;
+            }
+            .gh_a_icon {
+                float: left;
+                height: 20px;
+                width: 20px;
+                margin-right: 10px;
+            }
+            .gh_div_divider {
+                height: 1px;
+                width: 60%;
+                background-color: #ccc;
+                margin: 10px auto;
+            }
+            .gh_div_hint {
+                font-size: 16px;
+                margin: 5px 0px;
+            }
+        </style>
+    </head>
+    <body>
+        <form class="gh_form" action="{{ .FormAction }}" method=" {{ .FormMethod }}">
+            <table>
+                <tr>
+                    <td class="gh_str_logo">{{ .Logo }}</td>
+                </tr>
+                <tr>
+                    <td><input class="gh_inp_text" type="text" placeholder="username"></td>
+                </tr>
+                <tr>
+                    <td><input class="gh_inp_text" type="password" placeholder="password"></td>
+                </tr>
+                <tr>
+                    <td><a class="gh_a_small" href="/gatehouse/reset">I forgot my password...</a></td>
+                </tr>
+                <tr>
+                    <td><div class="gh_div_divider"></div></td>
+                </tr>
+                <tr>
+                    <td><a class="gh_a_button" href="/gatehouse/auth/google">Sign in with Google <img class="gh_a_icon" src="/icons/google.png"></a></td>
+                </tr>
+                <tr>
+                    <td><a class="gh_a_button" href="/gatehouse/auth/facebook">Sign in with Facebook <img class="gh_a_icon" src="/icons/facebook.png"></a></td>
+                </tr>
+                <tr>
+                    <td><a class="gh_a_button" href="/gatehouse/auth/microsoft">Sign in with Microsoft <img class="gh_a_icon" src="/icons/microsoft.png"></a></td>
+                </tr>
+                <!-- {{ .SignInOptions }} -->
+                <tr>
+                    <td><div class="gh_div_divider"></div></td>
+                </tr>
+                <tr>
+                    <td><div class="gh_div_hint">Don't have an account?</div></td>
+                </tr>
+                <tr>
+                    <td><a class="gh_a_button" href="/gatehouse/register">Create an Account</a></td>
+                </tr>
+            </table>
+        </form>
+    </body>
+</html>
