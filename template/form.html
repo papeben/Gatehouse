@@ -87,6 +87,13 @@
                         </td>
                     </tr>
                 {{ end }}
+                {{ range .OIDCOptions }}
+                    <tr>
+                        <td>
+                            <a class="gh_a_button" href="{{ .URI }}" style="background-color: {{ .BackgroundColor }}; color: {{ .TextColor }}">{{ .Text }}<img class="gh_a_icon" src="{{ .ImageURI }}"></a>
+                        </td>
+                    </tr>
+                {{ end }}
             </table>
         </form>
     </body>

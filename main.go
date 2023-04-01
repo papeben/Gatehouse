@@ -53,8 +53,11 @@ func main() {
 			FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"),
 			FormCreateDivider(),
 		},
-		false,
-		[]OIDCButton{},
+		[]OIDCButton{
+			{"Sign In with Google", "/" + functionalPath + "/static/icons/google.png", "#fff", "#000", "/" + functionalPath + "/auth/google"},
+			{"Sign In with Microsoft Account", "/" + functionalPath + "/static/icons/microsoft.png", "#fff", "#000", "/" + functionalPath + "/auth/microsoft"},
+			{"Sign In with Apple ID", "/" + functionalPath + "/static/icons/apple.png", "#fff", "#000", "/" + functionalPath + "/auth/apple"},
+		},
 	}
 
 	registrationPage := GatehouseForm{ // Define login page
@@ -74,7 +77,6 @@ func main() {
 			FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
 			FormCreateDivider(),
 		},
-		false,
 		[]OIDCButton{},
 	}
 
@@ -89,13 +91,15 @@ func main() {
 			FormCreateSubmitInput("register", "Send Reset Email"),
 			FormCreateDivider(),
 		},
-		false,
 		[]OIDCButton{},
 	}
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// MAIN REQUEST HANDLER
 	proxy := httputil.NewSingleHostReverseProxy(url)
+	staticFiles := http.StripPrefix("/"+functionalPath+"/static/", http.FileServer(http.Dir("./template/static/")))
+	http.Handle("/"+functionalPath+"/static/", staticFiles)
+
 	http.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) { // Create main listener function
 		gateFunction := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load action associated with URI from functionalURIs map
 

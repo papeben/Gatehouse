@@ -6,7 +6,6 @@ type GatehouseForm struct {
 	FormAction   string
 	FormMethod   string
 	FormElements []GatehouseFormElement
-	OIDCButtons  bool
 	OIDCOptions  []OIDCButton
 }
 
