@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>{{ .Title }}</title>
+        <title>{{ .TabTitle }}</title>
         <style>
             .gh_form {
                 position: absolute;
@@ -13,7 +13,7 @@
                 transform: translate(-50%, -50%);
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             }
-            .gh_str_logo {
+            .gh_str_title {
                 font-size: 24px;
                 text-align: center;
                 padding-bottom: 20px;
@@ -24,6 +24,14 @@
                 border: 0px solid transparent;
                 box-shadow: inset 1px 1px 3px #888;
                 font-size: 16px;
+            }
+            .gh_inp_button {
+                width: 300px;
+                padding: 18px 18px;
+                border: 0px solid transparent;
+                box-shadow: 1px 1px 3px #888;
+                font-size: 16px;
+                background-color: white;
             }
             .gh_a_small {
                 font-size: 14px;
@@ -59,42 +67,26 @@
         </style>
     </head>
     <body>
-        <form class="gh_form" action="{{ .FormAction }}" method=" {{ .FormMethod }}">
+        <form class="gh_form" action="{{ .FormAction }}" method="{{ .FormMethod }}">
             <table>
                 <tr>
-                    <td class="gh_str_logo">{{ .Logo }}</td>
+                    <td class="gh_str_title">{{ .FormTitle }}</td>
                 </tr>
-                <tr>
-                    <td><input class="gh_inp_text" type="text" placeholder="username"></td>
-                </tr>
-                <tr>
-                    <td><input class="gh_inp_text" type="password" placeholder="password"></td>
-                </tr>
-                <tr>
-                    <td><a class="gh_a_small" href="/gatehouse/reset">I forgot my password...</a></td>
-                </tr>
-                <tr>
-                    <td><div class="gh_div_divider"></div></td>
-                </tr>
-                <tr>
-                    <td><a class="gh_a_button" href="/gatehouse/auth/google">Sign in with Google <img class="gh_a_icon" src="/icons/google.png"></a></td>
-                </tr>
-                <tr>
-                    <td><a class="gh_a_button" href="/gatehouse/auth/facebook">Sign in with Facebook <img class="gh_a_icon" src="/icons/facebook.png"></a></td>
-                </tr>
-                <tr>
-                    <td><a class="gh_a_button" href="/gatehouse/auth/microsoft">Sign in with Microsoft <img class="gh_a_icon" src="/icons/microsoft.png"></a></td>
-                </tr>
-                <!-- {{ .SignInOptions }} -->
-                <tr>
-                    <td><div class="gh_div_divider"></div></td>
-                </tr>
-                <tr>
-                    <td><div class="gh_div_hint">Don't have an account?</div></td>
-                </tr>
-                <tr>
-                    <td><a class="gh_a_button" href="/gatehouse/register">Create an Account</a></td>
-                </tr>
+                {{ range .FormElements }}
+                    <tr>
+                        <td>
+                            {{ if .IsInput }}
+                            <input class="{{ .Class }}" name="{{ .InputName }}" type="{{ .InputType }}" placeholder="{{ .InputPlaceholder }}" value="{{ .InnerText }}">
+                            {{ else }}
+                                {{ if .IsLink }}
+                                <a class="{{ .Class }}" href="{{ .LinkURI }}">{{ .InnerText }}</a>
+                                {{ else }}
+                                <div class="{{ .Class }}">{{ .InnerText }}</div>
+                                {{ end }}
+                            {{ end }}
+                        </td>
+                    </tr>
+                {{ end }}
             </table>
         </form>
     </body>
