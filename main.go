@@ -23,6 +23,7 @@ func main() {
 		"GET": {
 			"/" + functionalPath + "/login":    "login",
 			"/" + functionalPath + "/register": "register",
+			"/" + functionalPath + "/forgot":   "forgot",
 		},
 	}
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
@@ -77,6 +78,21 @@ func main() {
 		[]OIDCButton{},
 	}
 
+	forgotPasswordPage := GatehouseForm{ // Define login page
+		appName + " - Reset Password",
+		"Reset Password",
+		"/submit",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateTextInput("email", "Email Address"),
+			FormCreateSubmitInput("register", "Send Reset Email"),
+			FormCreateDivider(),
+		},
+		false,
+		[]OIDCButton{},
+	}
+
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// MAIN REQUEST HANDLER
 	proxy := httputil.NewSingleHostReverseProxy(url)
@@ -89,6 +105,8 @@ func main() {
 				formTemplate.Execute(response, loginPage)
 			case "register":
 				formTemplate.Execute(response, registrationPage)
+			case "forgot":
+				formTemplate.Execute(response, forgotPasswordPage)
 			}
 		} else {
 			proxy.ServeHTTP(response, request)
