@@ -53,6 +53,28 @@ func GenerateSessionToken() string {
 	}
 }
 
+func GenerateResetToken() string {
+	newToken := GenerateRandomString(32)
+
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	var userID string
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ?", tablePrefix), newToken).Scan(&userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return newToken
+		} else {
+			panic(err)
+		}
+	} else {
+		return GenerateResetToken()
+	}
+}
+
 func GeneratEmailConfirmationToken() string {
 	newToken := GenerateRandomString(32)
 
@@ -195,11 +217,11 @@ func SendEmailConfirmationCode(userID string, email string) {
 		panic(err)
 	}
 	// Email code
-	err = sendMail(email, "Confirm your Email Address", "http://"+webDomain+"/"+functionalPath+"/confirmcode?c="+code)
+	err = sendMail(email, "Confirm your Email Address", webDomain+"/"+functionalPath+"/confirmcode?c="+code)
 	if err != nil {
 		fmt.Println(err)
 		fmt.Println("Error sending email to " + email + ". Placing link below:")
-		fmt.Println("http://" + webDomain + "/" + functionalPath + "/confirmcode?c=" + code)
+		fmt.Println(webDomain + "/" + functionalPath + "/confirmcode?c=" + code)
 	}
 }
 
@@ -267,4 +289,37 @@ func sendMail(to string, subject string, body string) error {
 	client.Quit()
 
 	return nil
+}
+
+func ResetPasswordRequest(email string) bool {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	var userID string
+	err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false
+		} else {
+			panic(err)
+		}
+	} else {
+		// Reset password
+		resetCode := GenerateResetToken()
+		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_resets (user_id, reset_token) VALUES (?, ?)", tablePrefix), userID, resetCode)
+		if err != nil {
+			panic(err)
+		}
+		err := sendMail(strings.ToLower(email), "Password Reset Request", webDomain+"/"+functionalPath+"/resetpassword?c="+resetCode)
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println("Error sending email to " + email + ". Placing link below:")
+			fmt.Println(webDomain + "/" + functionalPath + "/resetpassword?c=" + resetCode)
+		}
+		return true
+	}
+
 }
