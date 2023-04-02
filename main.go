@@ -15,23 +15,25 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// LOAD ENVIRONMENT VARIABLES
+
+var (
+	backendServerAddr string = envWithDefault("BACKEND_SERVER", "127.0.0.1") // Load configuration from environment or set defaults
+	backendServerPort string = envWithDefault("BACKEND_PORT", "9000")
+	listenPort        string = envWithDefault("LISTEN_PORT", "8080")
+	functionalPath    string = envWithDefault("GATEHOUSE_PATH", "gatehouse")
+	appName           string = envWithDefault("APP_NAME", "Gatehouse")
+	mysqlHost         string = envWithDefault("MYSQL_HOST", "127.0.0.1")
+	mysqlPort         string = envWithDefault("MYSQL_PORT", "3306")
+	mysqlUser         string = envWithDefault("MYSQL_USER", "gatehouse")
+	mysqlPassword     string = envWithDefault("MYSQL_PASS", "password")
+	mysqlDatabase     string = envWithDefault("MYSQL_DATABASE", "gatehouse")
+	tablePrefix       string = envWithDefault("TABLE_PREFIX", "gatehouse")
+	sessionCookieName string = envWithDefault("SESSION_COOKIE", "gatehouse-session")
+)
+
 func main() {
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// LOAD ENVIRONMENT VARIABLES
-	backendServerAddr := envWithDefault("BACKEND_SERVER", "127.0.0.1") // Load configuration from environment or set defaults
-	backendServerPort := envWithDefault("BACKEND_PORT", "9000")
-	listenPort := envWithDefault("LISTEN_PORT", "8080")
-	functionalPath := envWithDefault("GATEHOUSE_PATH", "gatehouse")
-	appName := envWithDefault("APP_NAME", "Gatehouse")
-
-	mysqlHost := envWithDefault("MYSQL_HOST", "127.0.0.1")
-	mysqlPort := envWithDefault("MYSQL_PORT", "3306")
-	mysqlUser := envWithDefault("MYSQL_USER", "gatehouse")
-	mysqlPassword := envWithDefault("MYSQL_PASS", "password")
-	mysqlDatabase := envWithDefault("MYSQL_DATABASE", "gatehouse")
-
-	tablePrefix := envWithDefault("TABLE_PREFIX", "gatehouse")
-
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// INITALISE DATABASE
 
@@ -59,18 +61,15 @@ func main() {
 			"/" + functionalPath + "/register": "register",
 			"/" + functionalPath + "/forgot":   "forgot",
 		},
+		"POST": {
+			"/" + functionalPath + "/submit/register": "sub_register",
+		},
 	}
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
 	if err != nil {
 		panic(err)
 	}
 	db.Close()
-
-	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// ASSEMBLE FORM PAGES
@@ -82,7 +81,7 @@ func main() {
 	loginPage := GatehouseForm{ // Define login page
 		appName + " - Sign in",
 		"Sign In",
-		"/submit",
+		"/" + functionalPath + "/submit/login",
 		"POST",
 		[]GatehouseFormElement{
 			FormCreateDivider(),
@@ -104,11 +103,11 @@ func main() {
 	registrationPage := GatehouseForm{ // Define registration page
 		appName + " - Create Account",
 		"Create an Account",
-		"/submit",
+		"/" + functionalPath + "/submit/register",
 		"POST",
 		[]GatehouseFormElement{
 			FormCreateDivider(),
-			FormCreateTextInput("username", "Username"),
+			FormCreateTextInput("newUsername", "Username"),
 			FormCreateTextInput("email", "Email Address"),
 			FormCreatePasswordInput("password", "Password"),
 			FormCreatePasswordInput("passwordConfirm", "Confirm Password"),
@@ -152,6 +151,8 @@ func main() {
 				formTemplate.Execute(response, registrationPage)
 			case "forgot":
 				formTemplate.Execute(response, forgotPasswordPage)
+			case "sub_register":
+				RegisterSubmission(response, request)
 			}
 		} else {
 			proxy.ServeHTTP(response, request)
