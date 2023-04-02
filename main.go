@@ -1,6 +1,8 @@
 package main
 
 import (
+	"database/sql"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -8,6 +10,9 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
@@ -18,6 +23,45 @@ func main() {
 	listenPort := envWithDefault("LISTEN_PORT", "8080")
 	functionalPath := envWithDefault("GATEHOUSE_PATH", "gatehouse")
 	appName := envWithDefault("APP_NAME", "Gatehouse")
+
+	mysqlHost := envWithDefault("MYSQL_HOST", "127.0.0.1")
+	mysqlPort := envWithDefault("MYSQL_PORT", "3306")
+	mysqlUser := envWithDefault("MYSQL_USER", "gatehouse")
+	mysqlPassword := envWithDefault("MYSQL_PASS", "password")
+	mysqlDatabase := envWithDefault("MYSQL_DATABASE", "gatehouse")
+
+	tablePrefix := envWithDefault("TABLE_PREFIX", "gatehouse")
+
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	db.SetConnMaxLifetime(time.Minute * 3)
+	defer db.Close()
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// INITALISE DATABASE
+	stmt, err := db.Prepare("SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ? LIMIT 1;")
+	if err != nil {
+		panic(err)
+	}
+	err = stmt.QueryRow(mysqlDatabase, tablePrefix+"_accounts").Scan() // Test database and tables exist
+	if err != nil {
+		if err == sql.ErrNoRows {
+			fmt.Println("Creating Database Tables")
+			_, err := db.Exec(fmt.Sprintf("CREATE TABLE `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NULL,`email_confirmed` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0,	`tfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println("Creating Database Tables")
+			_, err = db.Exec(fmt.Sprintf("CREATE TABLE `%s`.`%s_sessions` (`session_token` VARCHAR(64) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`session_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			panic(err)
+		}
+	}
 
 	functionalURIs := map[string]map[string]string{
 		"GET": {
@@ -60,7 +104,7 @@ func main() {
 		},
 	}
 
-	registrationPage := GatehouseForm{ // Define login page
+	registrationPage := GatehouseForm{ // Define registration page
 		appName + " - Create Account",
 		"Create an Account",
 		"/submit",
@@ -80,7 +124,7 @@ func main() {
 		[]OIDCButton{},
 	}
 
-	forgotPasswordPage := GatehouseForm{ // Define login page
+	forgotPasswordPage := GatehouseForm{ // Define forgot password page
 		appName + " - Reset Password",
 		"Reset Password",
 		"/submit",
