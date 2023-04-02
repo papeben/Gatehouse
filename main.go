@@ -32,6 +32,7 @@ var (
 	tablePrefix           string = envWithDefault("TABLE_PREFIX", "gatehouse")
 	sessionCookieName     string = envWithDefault("SESSION_COOKIE", "gatehouse-session")
 	requireAuthentication string = envWithDefault("REQUIRE_AUTH", "TRUE")
+	requireEmailConfirm   string = envWithDefault("REQUIRE_EMAIL_CONFIRM", "TRUE")
 )
 
 func main() {
@@ -47,7 +48,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NULL,`email_confirmed` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0,	`tfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+	_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NULL,`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0,	`tfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 	if err != nil {
 		panic(err)
 	}
@@ -55,13 +56,22 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_confirmations` (`confirmation_token` VARCHAR(32) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`confirmation_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+	if err != nil {
+		panic(err)
+	}
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Configure functional URLs
 
 	functionalURIs := map[string]map[string]string{
 		"GET": {
-			"/" + functionalPath + "/login":    "login",
-			"/" + functionalPath + "/logout":   "logout",
-			"/" + functionalPath + "/register": "register",
-			"/" + functionalPath + "/forgot":   "forgot",
+			"/" + functionalPath + "/login":        "login",
+			"/" + functionalPath + "/logout":       "logout",
+			"/" + functionalPath + "/register":     "register",
+			"/" + functionalPath + "/forgot":       "forgot",
+			"/" + functionalPath + "/confirmemail": "confirmemail",
+			"/" + functionalPath + "/confirmcode":  "confirm_email_code",
 		},
 		"POST": {
 			"/" + functionalPath + "/submit/register": "sub_register",
@@ -153,6 +163,50 @@ func main() {
 		[]OIDCButton{},
 	}
 
+	confirmEmailPage := GatehouseForm{ // Define forgot password page
+		appName + " - Confirm Email Address",
+		"Confirmation Required",
+		"/submit",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("A confirmation email has been sent to your registered email address."),
+			FormCreateDivider(),
+			FormCreateHint("Didn't recieve an email?"),
+			FormCreateButtonLink("/"+functionalPath+"/resendconfirmation", "Resend Confirmation Email"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+	}
+
+	confirmedEmailPage := GatehouseForm{ // Define forgot password page
+		appName + " - Confirmed Email Address",
+		"Email Confirmed",
+		"/",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Thank you for confirming your email address."),
+			FormCreateSmallLink("/", "Back to site"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+	}
+
+	linkExpired := GatehouseForm{ // Define forgot password page
+		appName + " - Expired",
+		"Link Expired",
+		"/",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("This confirmation code is no longer valid."),
+			FormCreateSmallLink("/", "Back to site"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+	}
+
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// MAIN REQUEST HANDLER
 	proxy := httputil.NewSingleHostReverseProxy(url)
@@ -174,21 +228,36 @@ func main() {
 				formTemplate.Execute(response, registrationPage)
 			case "forgot":
 				formTemplate.Execute(response, forgotPasswordPage)
+			case "confirmemail":
+				formTemplate.Execute(response, confirmEmailPage)
 			case "sub_register":
 				RegisterSubmission(response, request)
 			case "sub_login":
 				LoginSubmission(response, request)
+			case "confirm_email_code":
+				emailCode := request.URL.Query().Get("c")
+				if ConfirmEmailCode(emailCode) {
+					formTemplate.Execute(response, confirmedEmailPage)
+				} else {
+					formTemplate.Execute(response, linkExpired)
+				}
 			}
 
 		} else {
 
 			// For URLs not used by Gatehouse
-			if requireAuthentication == "FALSE" || isValidSession(request) {
+			if requireAuthentication == "FALSE" {
 				proxy.ServeHTTP(response, request)
 			} else {
-				http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+				validSession := IsValidSession(request)
+				if validSession {
+					proxy.ServeHTTP(response, request)
+				} else if !validSession && requireEmailConfirm == "TRUE" && PendingEmailApproval(request) {
+					http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
+				} else {
+					http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+				}
 			}
-
 		}
 	})
 
