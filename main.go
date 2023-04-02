@@ -19,18 +19,19 @@ import (
 // LOAD ENVIRONMENT VARIABLES
 
 var (
-	backendServerAddr string = envWithDefault("BACKEND_SERVER", "127.0.0.1") // Load configuration from environment or set defaults
-	backendServerPort string = envWithDefault("BACKEND_PORT", "9000")
-	listenPort        string = envWithDefault("LISTEN_PORT", "8080")
-	functionalPath    string = envWithDefault("GATEHOUSE_PATH", "gatehouse")
-	appName           string = envWithDefault("APP_NAME", "Gatehouse")
-	mysqlHost         string = envWithDefault("MYSQL_HOST", "127.0.0.1")
-	mysqlPort         string = envWithDefault("MYSQL_PORT", "3306")
-	mysqlUser         string = envWithDefault("MYSQL_USER", "gatehouse")
-	mysqlPassword     string = envWithDefault("MYSQL_PASS", "password")
-	mysqlDatabase     string = envWithDefault("MYSQL_DATABASE", "gatehouse")
-	tablePrefix       string = envWithDefault("TABLE_PREFIX", "gatehouse")
-	sessionCookieName string = envWithDefault("SESSION_COOKIE", "gatehouse-session")
+	backendServerAddr     string = envWithDefault("BACKEND_SERVER", "127.0.0.1") // Load configuration from environment or set defaults
+	backendServerPort     string = envWithDefault("BACKEND_PORT", "9000")
+	listenPort            string = envWithDefault("LISTEN_PORT", "8080")
+	functionalPath        string = envWithDefault("GATEHOUSE_PATH", "gatehouse")
+	appName               string = envWithDefault("APP_NAME", "Gatehouse")
+	mysqlHost             string = envWithDefault("MYSQL_HOST", "127.0.0.1")
+	mysqlPort             string = envWithDefault("MYSQL_PORT", "3306")
+	mysqlUser             string = envWithDefault("MYSQL_USER", "gatehouse")
+	mysqlPassword         string = envWithDefault("MYSQL_PASS", "password")
+	mysqlDatabase         string = envWithDefault("MYSQL_DATABASE", "gatehouse")
+	tablePrefix           string = envWithDefault("TABLE_PREFIX", "gatehouse")
+	sessionCookieName     string = envWithDefault("SESSION_COOKIE", "gatehouse-session")
+	requireAuthentication string = envWithDefault("REQUIRE_AUTH", "TRUE")
 )
 
 func main() {
@@ -58,11 +59,13 @@ func main() {
 	functionalURIs := map[string]map[string]string{
 		"GET": {
 			"/" + functionalPath + "/login":    "login",
+			"/" + functionalPath + "/logout":   "logout",
 			"/" + functionalPath + "/register": "register",
 			"/" + functionalPath + "/forgot":   "forgot",
 		},
 		"POST": {
 			"/" + functionalPath + "/submit/register": "sub_register",
+			"/" + functionalPath + "/submit/login":    "sub_login",
 		},
 	}
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
@@ -98,6 +101,22 @@ func main() {
 			{"Sign In with Microsoft Account", "/" + functionalPath + "/static/icons/microsoft.png", "#fff", "#000", "/" + functionalPath + "/auth/microsoft"},
 			{"Sign In with Apple ID", "/" + functionalPath + "/static/icons/apple.png", "#fff", "#000", "/" + functionalPath + "/auth/apple"},
 		},
+	}
+
+	logoutPage := GatehouseForm{ // Define login page
+		appName + " - Sign Out",
+		"Goodbye",
+		"/" + functionalPath + "/submit/logout",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("You have signed out."),
+			FormCreateSmallLink("/", "Back to site"),
+			FormCreateDivider(),
+			FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
+			FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"),
+		},
+		[]OIDCButton{},
 	}
 
 	registrationPage := GatehouseForm{ // Define registration page
@@ -144,18 +163,32 @@ func main() {
 		gateFunction := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load action associated with URI from functionalURIs map
 
 		if gateFunction != "" { // If functional URL
+
 			switch gateFunction { // Serve appropriate page
 			case "login":
 				formTemplate.Execute(response, loginPage)
+			case "logout":
+				http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
+				formTemplate.Execute(response, logoutPage)
 			case "register":
 				formTemplate.Execute(response, registrationPage)
 			case "forgot":
 				formTemplate.Execute(response, forgotPasswordPage)
 			case "sub_register":
 				RegisterSubmission(response, request)
+			case "sub_login":
+				LoginSubmission(response, request)
 			}
+
 		} else {
-			proxy.ServeHTTP(response, request)
+
+			// For URLs not used by Gatehouse
+			if requireAuthentication == "FALSE" || isValidSession(request) {
+				proxy.ServeHTTP(response, request)
+			} else {
+				http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+			}
+
 		}
 	})
 

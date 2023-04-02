@@ -39,7 +39,7 @@ func GenerateSessionToken() string {
 	defer db.Close()
 
 	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions WHERE session_token = ?", tablePrefix), strings.ToLower(newToken)).Scan(&userID)
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions WHERE session_token = ?", tablePrefix), newToken).Scan(&userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return newToken
@@ -68,5 +68,30 @@ func authenticateRequestor(response http.ResponseWriter, request *http.Request, 
 	cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
 	http.SetCookie(response, &cookie)
 	http.Redirect(response, request, "/", http.StatusSeeOther)
+}
 
+func isValidSession(request *http.Request) bool {
+	tokenCookie, err := request.Cookie(sessionCookieName)
+	if err != nil {
+		return false
+	} else {
+
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		var userID string
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions WHERE session_token = ?", tablePrefix), tokenCookie.Value).Scan(&userID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return false
+			} else {
+				panic(err)
+			}
+		} else {
+			return true
+		}
+	}
 }
