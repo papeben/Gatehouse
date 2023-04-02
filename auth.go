@@ -1,9 +1,11 @@
 package main
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/smtp"
 	"strings"
 )
 
@@ -193,5 +195,76 @@ func SendEmailConfirmationCode(userID string, email string) {
 		panic(err)
 	}
 	// Email code
-	fmt.Println(code)
+	err = sendMail(email, "Confirm your Email Address", "http://"+webDomain+"/"+functionalPath+"/confirmcode?c="+code)
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("Error sending email to " + email + ". Placing link below:")
+		fmt.Println("http://" + webDomain + "/" + functionalPath + "/confirmcode?c=" + code)
+	}
+}
+
+func sendMail(to string, subject string, body string) error {
+	var client *smtp.Client
+	var err error
+
+	// Create a custom tls.Config with InsecureSkipVerify set to true
+	if smtpTLS == "TRUE" {
+		// Use TLS encryption
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true,
+			ServerName:         smtpHost,
+		}
+		conn, err := tls.Dial("tcp", smtpHost+":"+smtpPort, tlsConfig)
+		if err != nil {
+			return err
+		}
+		client, err = smtp.NewClient(conn, smtpHost)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Don't use TLS encryption
+		client, err = smtp.Dial(smtpHost + ":" + smtpPort)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Set the sender and recipient
+	from := senderAddress
+
+	// Compose the email message
+	message := []byte("To: " + to + "\r\n" +
+		"From: " + from + "\r\n" +
+		"Subject: " + subject + "\r\n" +
+		"MIME-version: 1.0;\r\n" +
+		"Content-Type: text/html; charset=\"UTF-8\";\r\n" +
+		"\r\n" +
+		body + "\r\n")
+
+	// Send the email message
+	err = client.Mail(senderAddress)
+	if err != nil {
+		return err
+	}
+
+	err = client.Rcpt(to)
+	if err != nil {
+		return err
+	}
+
+	data, err := client.Data()
+	if err != nil {
+		return err
+	}
+	defer data.Close()
+	_, err = data.Write(message)
+	if err != nil {
+		return err
+	}
+
+	// Close the connection
+	client.Quit()
+
+	return nil
 }

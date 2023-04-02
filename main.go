@@ -33,6 +33,13 @@ var (
 	sessionCookieName     string = envWithDefault("SESSION_COOKIE", "gatehouse-session")
 	requireAuthentication string = envWithDefault("REQUIRE_AUTH", "TRUE")
 	requireEmailConfirm   string = envWithDefault("REQUIRE_EMAIL_CONFIRM", "TRUE")
+	smtpHost              string = envWithDefault("SMTP_HOST", "127.0.0.1")
+	smtpPort              string = envWithDefault("SMTP_PORT", "25")
+	smtpUser              string = envWithDefault("SMTP_USER", "")
+	smtpPass              string = envWithDefault("SMTP_PASS", "")
+	smtpTLS               string = envWithDefault("SMTP_TLS", "FALSE")
+	senderAddress         string = envWithDefault("MAIL_ADDRESS", "Gatehouse <gatehouse@mydomain.local>")
+	webDomain             string = envWithDefault("WEB_DOMAIN", "mydomain.local")
 )
 
 func main() {
