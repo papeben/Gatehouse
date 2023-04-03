@@ -252,6 +252,15 @@ func sendMail(to string, subject string, body string) error {
 		}
 	}
 
+	// Authenticate with the server if needed
+	if smtpUser != "" && smtpPass != "" {
+		auth := smtp.PlainAuth("", smtpUser, smtpPass, smtpHost)
+		err = client.Auth(auth)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Set the sender and recipient
 	from := senderAddress
 
@@ -371,5 +380,37 @@ func ResetSubmission(request *http.Request) bool {
 		}
 	} else {
 		return false
+	}
+}
+
+func ResendConfirmationEmail(request *http.Request) bool {
+	tokenCookie, err := request.Cookie(sessionCookieName)
+	if err != nil {
+		return false
+	} else {
+
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		var userID string
+		var email string
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND email_resent = 0", tablePrefix, tablePrefix), tokenCookie.Value).Scan(&userID, &email)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return false
+			} else {
+				panic(err)
+			}
+		} else {
+			SendEmailConfirmationCode(userID, email)
+			_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_resent = 1 WHERE id = ?", tablePrefix), userID)
+			if err != nil {
+				panic(err)
+			}
+			return true
+		}
 	}
 }

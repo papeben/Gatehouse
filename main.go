@@ -77,13 +77,14 @@ func main() {
 
 	functionalURIs := map[string]map[string]string{
 		"GET": {
-			"/" + functionalPath + "/login":         "login",
-			"/" + functionalPath + "/logout":        "logout",
-			"/" + functionalPath + "/register":      "register",
-			"/" + functionalPath + "/forgot":        "forgot",
-			"/" + functionalPath + "/confirmemail":  "confirmemail",
-			"/" + functionalPath + "/confirmcode":   "confirm_email_code",
-			"/" + functionalPath + "/resetpassword": "reset_password",
+			"/" + functionalPath + "/login":              "login",
+			"/" + functionalPath + "/logout":             "logout",
+			"/" + functionalPath + "/register":           "register",
+			"/" + functionalPath + "/forgot":             "forgot",
+			"/" + functionalPath + "/confirmemail":       "confirmemail",
+			"/" + functionalPath + "/confirmcode":        "confirm_email_code",
+			"/" + functionalPath + "/resetpassword":      "reset_password",
+			"/" + functionalPath + "/resendconfirmation": "resend_confirmation",
 		},
 		"POST": {
 			"/" + functionalPath + "/submit/register":     "sub_register",
@@ -162,7 +163,17 @@ func main() {
 					response.WriteHeader(400)
 					fmt.Fprint(response, `400 - Invalid request.`)
 				}
+			case "resend_confirmation":
+				if !IsValidSession(request) && PendingEmailApproval(request) {
+					if ResendConfirmationEmail(request) {
+						formTemplate.Execute(response, resendConfirmationPage)
+					} else {
+						formTemplate.Execute(response, linkExpired)
+					}
 
+				} else {
+					http.Redirect(response, request, "/", http.StatusSeeOther)
+				}
 			}
 
 		} else {
