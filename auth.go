@@ -321,5 +321,55 @@ func ResetPasswordRequest(email string) bool {
 		}
 		return true
 	}
+}
 
+func IsValidResetCode(code string) bool {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	var userID string
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ? AND used = 0", tablePrefix), code).Scan(&userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false
+		} else {
+			panic(err)
+		}
+	} else {
+		return true
+	}
+}
+
+func ResetSubmission(request *http.Request) bool {
+	code := request.URL.Query().Get("c")
+	password := request.FormValue("password")
+	passwordConfirm := request.FormValue("passwordConfirm")
+	if code != "" && password != "" && password == passwordConfirm {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		var userID string
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ? AND used = 0", tablePrefix), code).Scan(&userID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return false
+			} else {
+				panic(err)
+			}
+		} else {
+			_, err = db.Exec(fmt.Sprintf("UPDATE %s_resets INNER JOIN %s_accounts ON user_id = id SET password = ?, used = 1 WHERE reset_token = ?", tablePrefix, tablePrefix), HashPassword(password), code)
+			if err != nil {
+				panic(err)
+			}
+			return true
+		}
+	} else {
+		return false
+	}
 }

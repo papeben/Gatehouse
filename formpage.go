@@ -175,7 +175,7 @@ var (
 	forgotPasswordPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - Reset Password",
 		"Reset Password",
-		"/" + functionalPath + "/submit/reset",
+		"/" + functionalPath + "/submit/resetrequest",
 		"POST",
 		[]GatehouseFormElement{
 			FormCreateDivider(),
@@ -261,13 +261,27 @@ var (
 	resetPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - Reset Password",
 		"Reset Password",
-		"/",
-		"GET",
+		"/" + functionalPath + "/submit/reset",
+		"POST",
 		[]GatehouseFormElement{
 			FormCreateDivider(),
 			FormCreatePasswordInput("password", "Password"),
 			FormCreatePasswordInput("passwordConfirm", "Confirm Password"),
 			FormCreateSubmitInput("submit", "Set Password"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+	}
+
+	resetSuccessPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Reset Success",
+		"Reset Success",
+		"/",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Reset request successful."),
+			FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},

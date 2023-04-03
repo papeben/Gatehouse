@@ -86,9 +86,10 @@ func main() {
 			"/" + functionalPath + "/resetpassword": "reset_password",
 		},
 		"POST": {
-			"/" + functionalPath + "/submit/register": "sub_register",
-			"/" + functionalPath + "/submit/login":    "sub_login",
-			"/" + functionalPath + "/submit/reset":    "sub_reset",
+			"/" + functionalPath + "/submit/register":     "sub_register",
+			"/" + functionalPath + "/submit/login":        "sub_login",
+			"/" + functionalPath + "/submit/resetrequest": "sub_reset_request",
+			"/" + functionalPath + "/submit/reset":        "sub_reset",
 		},
 	}
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
@@ -138,7 +139,7 @@ func main() {
 				} else {
 					formTemplate.Execute(response, linkExpired)
 				}
-			case "sub_reset":
+			case "sub_reset_request":
 				email := request.FormValue("email")
 				if ResetPasswordRequest(email) {
 					formTemplate.Execute(response, resetSentPage)
@@ -146,8 +147,22 @@ func main() {
 					formTemplate.Execute(response, resetNotSentPage)
 				}
 			case "reset_password":
-				//resetCode := request.URL.Query().Get("c")
-				formTemplate.Execute(response, resetPage)
+				resetCode := request.URL.Query().Get("c")
+				if resetCode != "" && IsValidResetCode(resetCode) {
+					customResetPage := resetPage
+					customResetPage.FormAction += fmt.Sprintf("?c=%s", resetCode)
+					formTemplate.Execute(response, customResetPage)
+				} else {
+					formTemplate.Execute(response, linkExpired)
+				}
+			case "sub_reset":
+				if ResetSubmission(request) {
+					formTemplate.Execute(response, resetSuccessPage)
+				} else {
+					response.WriteHeader(400)
+					fmt.Fprint(response, `400 - Invalid request.`)
+				}
+
 			}
 
 		} else {
