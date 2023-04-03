@@ -28,8 +28,8 @@ func RegisterSubmission(response http.ResponseWriter, request *http.Request) {
 		if err != nil {
 			panic(err)
 		}
-
-		authenticateRequestor(response, request, userID)
+		SendEmailConfirmationCode(userID, email)
+		AuthenticateRequestor(response, request, userID)
 
 	} else {
 
@@ -63,7 +63,7 @@ func LoginSubmission(response http.ResponseWriter, request *http.Request) {
 	}
 
 	if isValid {
-		authenticateRequestor(response, request, userID)
+		AuthenticateRequestor(response, request, userID)
 	} else {
 		http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
 	}

@@ -32,6 +32,14 @@ var (
 	tablePrefix           string = envWithDefault("TABLE_PREFIX", "gatehouse")
 	sessionCookieName     string = envWithDefault("SESSION_COOKIE", "gatehouse-session")
 	requireAuthentication string = envWithDefault("REQUIRE_AUTH", "TRUE")
+	requireEmailConfirm   string = envWithDefault("REQUIRE_EMAIL_CONFIRM", "TRUE")
+	smtpHost              string = envWithDefault("SMTP_HOST", "127.0.0.1")
+	smtpPort              string = envWithDefault("SMTP_PORT", "25")
+	smtpUser              string = envWithDefault("SMTP_USER", "")
+	smtpPass              string = envWithDefault("SMTP_PASS", "")
+	smtpTLS               string = envWithDefault("SMTP_TLS", "FALSE")
+	senderAddress         string = envWithDefault("MAIL_ADDRESS", "Gatehouse <gatehouse@mydomain.local>")
+	webDomain             string = envWithDefault("WEB_DOMAIN", "http://localhost:8080")
 )
 
 func main() {
@@ -47,7 +55,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NULL,`email_confirmed` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0,	`tfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+	_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NULL,`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0,	`tfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 	if err != nil {
 		panic(err)
 	}
@@ -55,17 +63,33 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_confirmations` (`confirmation_token` VARCHAR(32) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`confirmation_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+	if err != nil {
+		panic(err)
+	}
+	_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_resets` (`reset_token` VARCHAR(32) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`reset_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+	if err != nil {
+		panic(err)
+	}
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Configure functional URLs
 
 	functionalURIs := map[string]map[string]string{
 		"GET": {
-			"/" + functionalPath + "/login":    "login",
-			"/" + functionalPath + "/logout":   "logout",
-			"/" + functionalPath + "/register": "register",
-			"/" + functionalPath + "/forgot":   "forgot",
+			"/" + functionalPath + "/login":         "login",
+			"/" + functionalPath + "/logout":        "logout",
+			"/" + functionalPath + "/register":      "register",
+			"/" + functionalPath + "/forgot":        "forgot",
+			"/" + functionalPath + "/confirmemail":  "confirmemail",
+			"/" + functionalPath + "/confirmcode":   "confirm_email_code",
+			"/" + functionalPath + "/resetpassword": "reset_password",
 		},
 		"POST": {
-			"/" + functionalPath + "/submit/register": "sub_register",
-			"/" + functionalPath + "/submit/login":    "sub_login",
+			"/" + functionalPath + "/submit/register":     "sub_register",
+			"/" + functionalPath + "/submit/login":        "sub_login",
+			"/" + functionalPath + "/submit/resetrequest": "sub_reset_request",
+			"/" + functionalPath + "/submit/reset":        "sub_reset",
 		},
 	}
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
@@ -79,78 +103,6 @@ func main() {
 	formTemplate, err := template.ParseFiles("template/form.html")
 	if err != nil {
 		panic(err)
-	}
-
-	loginPage := GatehouseForm{ // Define login page
-		appName + " - Sign in",
-		"Sign In",
-		"/" + functionalPath + "/submit/login",
-		"POST",
-		[]GatehouseFormElement{
-			FormCreateDivider(),
-			FormCreateTextInput("username", "Username"),
-			FormCreatePasswordInput("password", "Password"),
-			FormCreateSmallLink("/"+functionalPath+"/forgot", "Forgot my password..."),
-			FormCreateSubmitInput("signin", "Sign In"),
-			FormCreateDivider(),
-			FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"),
-			FormCreateDivider(),
-		},
-		[]OIDCButton{
-			// {"Sign In with Google", "/" + functionalPath + "/static/icons/google.png", "#fff", "#000", "/" + functionalPath + "/auth/google"},
-			// {"Sign In with Microsoft Account", "/" + functionalPath + "/static/icons/microsoft.png", "#fff", "#000", "/" + functionalPath + "/auth/microsoft"},
-			// {"Sign In with Apple ID", "/" + functionalPath + "/static/icons/apple.png", "#fff", "#000", "/" + functionalPath + "/auth/apple"},
-		},
-	}
-
-	logoutPage := GatehouseForm{ // Define login page
-		appName + " - Sign Out",
-		"Goodbye",
-		"/" + functionalPath + "/submit/logout",
-		"GET",
-		[]GatehouseFormElement{
-			FormCreateDivider(),
-			FormCreateHint("You have signed out."),
-			FormCreateSmallLink("/", "Back to site"),
-			FormCreateDivider(),
-			FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
-			FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"),
-		},
-		[]OIDCButton{},
-	}
-
-	registrationPage := GatehouseForm{ // Define registration page
-		appName + " - Create Account",
-		"Create an Account",
-		"/" + functionalPath + "/submit/register",
-		"POST",
-		[]GatehouseFormElement{
-			FormCreateDivider(),
-			FormCreateTextInput("newUsername", "Username"),
-			FormCreateTextInput("email", "Email Address"),
-			FormCreatePasswordInput("password", "Password"),
-			FormCreatePasswordInput("passwordConfirm", "Confirm Password"),
-			FormCreateSubmitInput("register", "Create Account"),
-			FormCreateDivider(),
-			FormCreateHint("Already have an account?"),
-			FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
-			FormCreateDivider(),
-		},
-		[]OIDCButton{},
-	}
-
-	forgotPasswordPage := GatehouseForm{ // Define forgot password page
-		appName + " - Reset Password",
-		"Reset Password",
-		"/submit",
-		"POST",
-		[]GatehouseFormElement{
-			FormCreateDivider(),
-			FormCreateTextInput("email", "Email Address"),
-			FormCreateSubmitInput("register", "Send Reset Email"),
-			FormCreateDivider(),
-		},
-		[]OIDCButton{},
 	}
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -174,21 +126,60 @@ func main() {
 				formTemplate.Execute(response, registrationPage)
 			case "forgot":
 				formTemplate.Execute(response, forgotPasswordPage)
+			case "confirmemail":
+				formTemplate.Execute(response, confirmEmailPage)
 			case "sub_register":
 				RegisterSubmission(response, request)
 			case "sub_login":
 				LoginSubmission(response, request)
+			case "confirm_email_code":
+				emailCode := request.URL.Query().Get("c")
+				if ConfirmEmailCode(emailCode) {
+					formTemplate.Execute(response, confirmedEmailPage)
+				} else {
+					formTemplate.Execute(response, linkExpired)
+				}
+			case "sub_reset_request":
+				email := request.FormValue("email")
+				if ResetPasswordRequest(email) {
+					formTemplate.Execute(response, resetSentPage)
+				} else {
+					formTemplate.Execute(response, resetNotSentPage)
+				}
+			case "reset_password":
+				resetCode := request.URL.Query().Get("c")
+				if resetCode != "" && IsValidResetCode(resetCode) {
+					customResetPage := resetPage
+					customResetPage.FormAction += fmt.Sprintf("?c=%s", resetCode)
+					formTemplate.Execute(response, customResetPage)
+				} else {
+					formTemplate.Execute(response, linkExpired)
+				}
+			case "sub_reset":
+				if ResetSubmission(request) {
+					formTemplate.Execute(response, resetSuccessPage)
+				} else {
+					response.WriteHeader(400)
+					fmt.Fprint(response, `400 - Invalid request.`)
+				}
+
 			}
 
 		} else {
 
 			// For URLs not used by Gatehouse
-			if requireAuthentication == "FALSE" || isValidSession(request) {
+			if requireAuthentication == "FALSE" {
 				proxy.ServeHTTP(response, request)
 			} else {
-				http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+				validSession := IsValidSession(request)
+				if validSession {
+					proxy.ServeHTTP(response, request)
+				} else if !validSession && requireEmailConfirm == "TRUE" && PendingEmailApproval(request) {
+					http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
+				} else {
+					http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+				}
 			}
-
 		}
 	})
 
