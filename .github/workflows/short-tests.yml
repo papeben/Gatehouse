@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mysql:
-        image: mysql:latest
+        image: mysql
         env:
           MYSQL_ROOT_PASSWORD: testing
         options: >-
