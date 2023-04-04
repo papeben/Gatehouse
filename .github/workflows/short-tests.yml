@@ -17,7 +17,7 @@ jobs:
         image: docker.io/library/mysql:latest
         env:
           MYSQL_ROOT_PASSWORD: testing
-        options:
+        options: >-
           --health-cmd 'mysqladmin ping'  
           --health-interval 10s
           --health-timeout 5s
