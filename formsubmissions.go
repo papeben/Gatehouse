@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"net/mail"
 	"regexp"
 	"strings"
 )
@@ -96,8 +95,8 @@ func IsValidNewUsername(username string) bool {
 }
 
 func IsValidNewEmail(email string) bool {
-	_, err := mail.ParseAddress(email)
-	if err == nil {
+	match, _ := regexp.MatchString(`^[\w!#$%&'*+/=?^_{|}~-]+(\.[\w!#$%&'*+/=?^_{|}~-]+)*@[a-zA-Z0-9]+(\.[a-zA-Z0-9-]+)*(\.[a-zA-Z]{2,})$`, email)
+	if match {
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 		if err != nil {
 			panic(err)
