@@ -75,7 +75,7 @@ func GenerateResetToken() string {
 	}
 }
 
-func GeneratEmailConfirmationToken() string {
+func GenerateEmailConfirmationToken() string {
 	newToken := GenerateRandomString(32)
 
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
@@ -93,7 +93,7 @@ func GeneratEmailConfirmationToken() string {
 			panic(err)
 		}
 	} else {
-		return GeneratEmailConfirmationToken()
+		return GenerateEmailConfirmationToken()
 	}
 }
 
@@ -206,7 +206,7 @@ func ConfirmEmailCode(code string) bool {
 }
 
 func SendEmailConfirmationCode(userID string, email string) {
-	code := GeneratEmailConfirmationToken()
+	code := GenerateEmailConfirmationToken()
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 	if err != nil {
 		panic(err)

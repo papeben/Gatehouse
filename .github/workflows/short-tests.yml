@@ -1,0 +1,43 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Short Tests
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: docker.io/library/mysql:latest
+        env:
+          MYSQL_ROOT_PASSWORD: testing
+        options: --health-cmd "mysqladmin ping" --health-interval 10s --health-timeout 5s --health-retries 5
+        ports:
+          - 3306:3306
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18.1
+
+    - name: Tests
+      run: go test -v .
+      env:
+        MYSQL_USER: root
+        MYSQL_PASS: testing
+
+    - name: Build
+      run: go build -v .
+
+        
+    
+
