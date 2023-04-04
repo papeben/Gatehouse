@@ -14,14 +14,14 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mysql:
-        image: mysql:8
+        image: docker.io/library/mysql:latest
         env:
           MYSQL_ROOT_PASSWORD: testing
         options:
-          - "--health-cmd 'mysqladmin ping'"
-          - "--health-interval 10s"
-          - "--health-timeout 5s"
-          - "--health-retries 5"
+          --health-cmd 'mysqladmin ping'  
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
     - name: Check out repository code
       uses: actions/checkout@v3
