@@ -223,7 +223,7 @@ var (
 		"GET",
 		[]GatehouseFormElement{
 			FormCreateDivider(),
-			FormCreateHint("This confirmation code is no longer valid."),
+			FormCreateHint("This link is no longer valid."),
 			FormCreateSmallLink("/", "Back to site"),
 			FormCreateDivider(),
 		},
@@ -282,6 +282,19 @@ var (
 			FormCreateDivider(),
 			FormCreateHint("Reset request successful."),
 			FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+	}
+
+	resendConfirmationPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Second Confirmation Sent",
+		"Second Confirmation Sent",
+		"/",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Second confirmation email sent. If the problem persists please contact your system administrator."),
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
