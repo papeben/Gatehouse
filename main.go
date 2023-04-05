@@ -73,7 +73,7 @@ func main() {
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// ASSEMBLE FORM PAGES
-	formTemplate, err := template.ParseFiles("template/form.html")
+	formTemplate, err := template.ParseFiles("assets/form.html")
 	if err != nil {
 		panic(err)
 	}
@@ -81,7 +81,7 @@ func main() {
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// MAIN REQUEST HANDLER
 	proxy := httputil.NewSingleHostReverseProxy(url)
-	staticFiles := http.StripPrefix("/"+functionalPath+"/static/", http.FileServer(http.Dir("./template/static/")))
+	staticFiles := http.StripPrefix("/"+functionalPath+"/static/", http.FileServer(http.Dir("./assets/static/")))
 	http.Handle("/"+functionalPath+"/static/", staticFiles)
 
 	http.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) { // Create main listener function
