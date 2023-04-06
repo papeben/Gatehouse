@@ -1,12 +1,13 @@
 package main
 
 type GatehouseForm struct {
-	TabTitle     string
-	FormTitle    string
-	FormAction   string
-	FormMethod   string
-	FormElements []GatehouseFormElement
-	OIDCOptions  []OIDCButton
+	TabTitle       string
+	FormTitle      string
+	FormAction     string
+	FormMethod     string
+	FormElements   []GatehouseFormElement
+	OIDCOptions    []OIDCButton
+	FunctionalPath string
 }
 
 type GatehouseFormElement struct {
@@ -134,6 +135,7 @@ var (
 			// {"Sign In with Microsoft Account", "/" + functionalPath + "/static/icons/microsoft.png", "#fff", "#000", "/" + functionalPath + "/auth/microsoft"},
 			// {"Sign In with Apple ID", "/" + functionalPath + "/static/icons/apple.png", "#fff", "#000", "/" + functionalPath + "/auth/apple"},
 		},
+		functionalPath,
 	}
 
 	logoutPage GatehouseForm = GatehouseForm{ // Define login page
@@ -150,6 +152,7 @@ var (
 			FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"),
 		},
 		[]OIDCButton{},
+		functionalPath,
 	}
 
 	registrationPage GatehouseForm = GatehouseForm{ // Define registration page
@@ -170,6 +173,7 @@ var (
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
+		functionalPath,
 	}
 
 	forgotPasswordPage GatehouseForm = GatehouseForm{ // Define forgot password page
@@ -184,6 +188,7 @@ var (
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
+		functionalPath,
 	}
 
 	confirmEmailPage GatehouseForm = GatehouseForm{ // Define forgot password page
@@ -200,6 +205,7 @@ var (
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
+		functionalPath,
 	}
 
 	confirmedEmailPage GatehouseForm = GatehouseForm{ // Define forgot password page
@@ -214,6 +220,7 @@ var (
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
+		functionalPath,
 	}
 
 	linkExpired GatehouseForm = GatehouseForm{ // Define forgot password page
@@ -228,6 +235,7 @@ var (
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
+		functionalPath,
 	}
 
 	resetSentPage GatehouseForm = GatehouseForm{ // Define forgot password page
@@ -242,6 +250,7 @@ var (
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
+		functionalPath,
 	}
 
 	resetNotSentPage GatehouseForm = GatehouseForm{ // Define forgot password page
@@ -256,6 +265,7 @@ var (
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
+		functionalPath,
 	}
 
 	resetPage GatehouseForm = GatehouseForm{ // Define forgot password page
@@ -271,6 +281,7 @@ var (
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
+		functionalPath,
 	}
 
 	resetSuccessPage GatehouseForm = GatehouseForm{ // Define forgot password page
@@ -285,6 +296,7 @@ var (
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
+		functionalPath,
 	}
 
 	resendConfirmationPage GatehouseForm = GatehouseForm{ // Define forgot password page
@@ -298,5 +310,6 @@ var (
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
+		functionalPath,
 	}
 )
