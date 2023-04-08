@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 func RegisterSubmission(response http.ResponseWriter, request *http.Request) {
