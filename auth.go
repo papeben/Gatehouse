@@ -232,8 +232,12 @@ func sendMail(to string, subject string, body string) error {
 	// Create a custom tls.Config with InsecureSkipVerify set to true
 	if smtpTLS == "TRUE" {
 		// Use TLS encryption
+		insecureSkipVerify := true
+		if smtpTLSSkipVerify == "FALSE" {
+			insecureSkipVerify = false
+		}
 		tlsConfig := &tls.Config{
-			InsecureSkipVerify: true,
+			InsecureSkipVerify: insecureSkipVerify,
 			ServerName:         smtpHost,
 		}
 		conn, err := tls.Dial("tcp", smtpHost+":"+smtpPort, tlsConfig)
@@ -288,14 +292,22 @@ func sendMail(to string, subject string, body string) error {
 	if err != nil {
 		return err
 	}
-	defer data.Close()
+
 	_, err = data.Write(message)
 	if err != nil {
 		return err
 	}
 
 	// Close the connection
-	client.Quit()
+	err = data.Close()
+	if err != nil {
+		return err
+	}
+
+	err = client.Quit()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

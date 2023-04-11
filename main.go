@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -38,6 +37,7 @@ var (
 	smtpUser              string = envWithDefault("SMTP_USER", "")
 	smtpPass              string = envWithDefault("SMTP_PASS", "")
 	smtpTLS               string = envWithDefault("SMTP_TLS", "FALSE")
+	smtpTLSSkipVerify     string = envWithDefault("SMTP_TLS", "FALSE")
 	senderAddress         string = envWithDefault("MAIL_ADDRESS", "Gatehouse <gatehouse@mydomain.local>")
 	webDomain             string = envWithDefault("WEB_DOMAIN", "http://localhost:8080")
 )
@@ -89,53 +89,53 @@ func main() {
 		gateFunction := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load action associated with URI from functionalURIs map
 
 		if gateFunction != "" { // If functional URL
-
+			var err error
 			switch gateFunction { // Serve appropriate page
 			case "login":
-				formTemplate.Execute(response, loginPage)
+				err = formTemplate.Execute(response, loginPage)
 			case "logout":
 				http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
-				formTemplate.Execute(response, logoutPage)
+				err = formTemplate.Execute(response, logoutPage)
 			case "register":
-				formTemplate.Execute(response, registrationPage)
+				err = formTemplate.Execute(response, registrationPage)
 			case "forgot":
-				formTemplate.Execute(response, forgotPasswordPage)
+				err = formTemplate.Execute(response, forgotPasswordPage)
 			case "confirmemail":
-				formTemplate.Execute(response, confirmEmailPage)
+				err = formTemplate.Execute(response, confirmEmailPage)
 			case "sub_register":
 				if IsValidNewEmail(request.FormValue("email")) {
 					RegisterSubmission(response, request)
 				} else {
-					formTemplate.Execute(response, emailTakenPage)
+					err = formTemplate.Execute(response, emailTakenPage)
 				}
 			case "sub_login":
 				LoginSubmission(response, request)
 			case "confirm_email_code":
 				emailCode := request.URL.Query().Get("c")
 				if ConfirmEmailCode(emailCode) {
-					formTemplate.Execute(response, confirmedEmailPage)
+					err = formTemplate.Execute(response, confirmedEmailPage)
 				} else {
-					formTemplate.Execute(response, linkExpired)
+					err = formTemplate.Execute(response, linkExpired)
 				}
 			case "sub_reset_request":
 				email := request.FormValue("email")
 				if ResetPasswordRequest(email) {
-					formTemplate.Execute(response, resetSentPage)
+					err = formTemplate.Execute(response, resetSentPage)
 				} else {
-					formTemplate.Execute(response, resetNotSentPage)
+					err = formTemplate.Execute(response, resetNotSentPage)
 				}
 			case "reset_password":
 				resetCode := request.URL.Query().Get("c")
 				if resetCode != "" && IsValidResetCode(resetCode) {
 					customResetPage := resetPage
 					customResetPage.FormAction += fmt.Sprintf("?c=%s", resetCode)
-					formTemplate.Execute(response, customResetPage)
+					err = formTemplate.Execute(response, customResetPage)
 				} else {
-					formTemplate.Execute(response, linkExpired)
+					err = formTemplate.Execute(response, linkExpired)
 				}
 			case "sub_reset":
 				if ResetSubmission(request) {
-					formTemplate.Execute(response, resetSuccessPage)
+					err = formTemplate.Execute(response, resetSuccessPage)
 				} else {
 					response.WriteHeader(400)
 					fmt.Fprint(response, `400 - Invalid request.`)
@@ -143,9 +143,9 @@ func main() {
 			case "resend_confirmation":
 				if !IsValidSession(request) && PendingEmailApproval(request) {
 					if ResendConfirmationEmail(request) {
-						formTemplate.Execute(response, resendConfirmationPage)
+						err = formTemplate.Execute(response, resendConfirmationPage)
 					} else {
-						formTemplate.Execute(response, linkExpired)
+						err = formTemplate.Execute(response, linkExpired)
 					}
 
 				} else {
@@ -159,6 +159,9 @@ func main() {
 					response.WriteHeader(200)
 					fmt.Fprint(response, `Username available.`)
 				}
+			}
+			if err != nil {
+				panic(err)
 			}
 
 		} else {
@@ -179,12 +182,17 @@ func main() {
 		}
 	})
 
-	log.Fatal(http.ListenAndServe(":"+listenPort, nil))
+	server := &http.Server{
+		Addr:              ":" + listenPort,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	err = server.ListenAndServe()
+	if err != nil {
+		panic(err)
+	}
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////
-// ENV WITH DEFAULT
-// Used to pull environments variables and use a default value if not set
 func envWithDefault(variableName, defaultString string) string {
 	val := os.Getenv(variableName)
 	if len(val) == 0 {
