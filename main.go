@@ -103,7 +103,11 @@ func main() {
 			case "confirmemail":
 				formTemplate.Execute(response, confirmEmailPage)
 			case "sub_register":
-				RegisterSubmission(response, request)
+				if IsValidNewEmail(request.FormValue("email")) {
+					RegisterSubmission(response, request)
+				} else {
+					formTemplate.Execute(response, emailTakenPage)
+				}
 			case "sub_login":
 				LoginSubmission(response, request)
 			case "confirm_email_code":
