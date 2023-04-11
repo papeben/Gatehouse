@@ -1,3 +1,6 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
 .gh_form {
     position: absolute;
     left: 50%;
@@ -6,7 +9,6 @@
     border-radius: 10px;
     box-shadow: 1px 1px 6px #888;
     transform: translate(-50%, -50%);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 .gh_str_title {
     font-size: 24px;
@@ -15,10 +17,12 @@
 }
 .gh_inp_text {
     width: 264px;
-    padding: 18px 18px;
+    padding: 17px 17px;
     border: 0px solid transparent;
     box-shadow: inset 1px 1px 3px #888;
     font-size: 16px;
+    outline: none;
+    border: 1px solid white;
 }
 .gh_inp_button {
     width: 300px;
@@ -27,6 +31,10 @@
     box-shadow: 1px 1px 3px #888;
     font-size: 16px;
     background-color: white;
+}
+.gh_inp_button:hover {
+    cursor: pointer;
+    background-color: #f1f1f1;
 }
 .gh_a_small {
     font-size: 14px;
@@ -42,6 +50,10 @@
     font-size: 16px;
     text-decoration: none;
     color: black;
+}
+.gh_a_button:hover {
+    cursor: pointer;
+    background-color: #f1f1f1;
 }
 .gh_a_icon {
     float: left;
@@ -59,4 +71,9 @@
     font-size: 16px;
     max-width: 264px;
     margin: 5px 0px;
+}
+.gh_div_err {
+    position: absolute;
+    padding: 18px 10px;
+    line-height: 20px;
 }
