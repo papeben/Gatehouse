@@ -1,8 +1,8 @@
 package main
 
 import (
-	"math/rand"
-	"time"
+	"crypto/rand"
+	"math/big"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -22,12 +22,17 @@ func CheckPasswordHash(password, hash string) bool {
 
 func GenerateRandomString(length int) string {
 	charset := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	rand.Seed(time.Now().UnixNano())
+	charsetLength := big.NewInt(int64(len(charset)))
+	bytes := make([]byte, length)
 
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
+	for i := 0; i < length; i++ {
+		num, err := rand.Int(rand.Reader, charsetLength)
+		if err != nil {
+			panic(err)
+		}
+
+		bytes[i] = charset[num.Int64()]
 	}
 
-	return string(b)
+	return string(bytes)
 }
