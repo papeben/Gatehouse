@@ -3,9 +3,10 @@
     <head>
         <title>{{ .TabTitle }}</title>
         <link rel="stylesheet" href="/{{ .FunctionalPath }}/static/gatehouse.css">
+        <script src="/{{ .FunctionalPath }}/static/gatehouse.js"></script>
     </head>
     <body>
-        <form class="gh_form" action="{{ .FormAction }}" method="{{ .FormMethod }}">
+        <form class="gh_form" action="{{ .FormAction }}" method="{{ .FormMethod }}" onsubmit="return submitReady()">
             <table>
                 <tr>
                     <td class="gh_str_title">{{ .FormTitle }}</td>
@@ -14,7 +15,7 @@
                     <tr>
                         <td>
                             {{ if .IsInput }}
-                            <input class="{{ .Class }}" name="{{ .InputName }}" type="{{ .InputType }}" placeholder="{{ .InputPlaceholder }}" value="{{ .InnerText }}">
+                            <input class="{{ .Class }}" name="{{ .InputName }}" type="{{ .InputType }}" placeholder="{{ .InputPlaceholder }}" value="{{ .InnerText }}" required>
                             {{ else }}
                                 {{ if .IsLink }}
                                 <a class="{{ .Class }}" href="{{ .LinkURI }}">{{ .InnerText }}</a>
