@@ -232,9 +232,9 @@ func sendMail(to string, subject string, body string) error {
 	// Create a custom tls.Config with InsecureSkipVerify set to true
 	if smtpTLS == "TRUE" {
 		// Use TLS encryption
-		insecureSkipVerify := true
-		if smtpTLSSkipVerify == "FALSE" {
-			insecureSkipVerify = false
+		insecureSkipVerify := false
+		if smtpTLSSkipVerify != "FALSE" {
+			insecureSkipVerify = true
 		}
 		tlsConfig := &tls.Config{
 			InsecureSkipVerify: insecureSkipVerify,
