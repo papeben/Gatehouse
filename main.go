@@ -58,6 +58,7 @@ func main() {
 			"/" + functionalPath + "/confirmcode":        "confirm_email_code",
 			"/" + functionalPath + "/resetpassword":      "reset_password",
 			"/" + functionalPath + "/resendconfirmation": "resend_confirmation",
+			"/" + functionalPath + "/usernametaken":      "username_taken",
 		},
 		"POST": {
 			"/" + functionalPath + "/submit/register":     "sub_register",
@@ -145,6 +146,14 @@ func main() {
 
 				} else {
 					http.Redirect(response, request, "/", http.StatusSeeOther)
+				}
+			case "username_taken":
+				if !IsValidNewUsername(request.URL.Query().Get("u")) {
+					response.WriteHeader(400)
+					fmt.Fprint(response, `Username taken.`)
+				} else {
+					response.WriteHeader(200)
+					fmt.Fprint(response, `Username available.`)
 				}
 			}
 
