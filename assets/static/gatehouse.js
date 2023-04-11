@@ -69,9 +69,30 @@ function initNewUsername(){ // If new username field, validate it
                 usernameInput.style.border = `1px solid red`
             }
             else {
-                removeInputError("newUsername")
-                usernameInput.style.border = `1px solid green`
+                fetch(`/gatehouse/usernametaken?u=${username}`, {
+                    method: 'GET',
+                    headers: { 'Accept': 'text/html' }
+                })
+                .then(response => {
+                    if (response.status === 200) {
+                        removeInputError("newUsername")
+                        usernameInput.style.border = `1px solid green`
+                    } else if (response.status === 400) {
+                        createInputError("newUsername", "Username is taken.")
+                        usernameInput.style.border = `1px solid red`
+                    } else {
+                        throw new Error(`Unexpected response status: ${response.status}`);
+                    }
+                })
+                .catch(error => {
+                    console.error(`Error checking username availability: ${error}`);
+                }); 
             }
+        })
+
+        usernameInput.addEventListener("keydown", function(){
+            removeInputError("newUsername")
+            usernameInput.style.border = null
         })
 
     }
