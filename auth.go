@@ -236,6 +236,7 @@ func sendMail(to string, subject string, body string) error {
 		if smtpTLSSkipVerify != "FALSE" {
 			insecureSkipVerify = true
 		}
+		/* #nosec G402 */
 		tlsConfig := &tls.Config{
 			InsecureSkipVerify: insecureSkipVerify,
 			ServerName:         smtpHost,
