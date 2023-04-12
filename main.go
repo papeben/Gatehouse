@@ -40,6 +40,8 @@ var (
 	smtpTLSSkipVerify     string = envWithDefault("SMTP_TLS", "FALSE")
 	senderAddress         string = envWithDefault("MAIL_ADDRESS", "Gatehouse <gatehouse@mydomain.local>")
 	webDomain             string = envWithDefault("WEB_DOMAIN", "http://localhost:8080")
+	formTemplate          *template.Template
+	emailTemplate         *template.Template
 )
 
 func main() {
@@ -74,7 +76,12 @@ func main() {
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// ASSEMBLE FORM PAGES
-	formTemplate, err := template.ParseFiles("assets/form.html")
+	formTemplate, err = template.ParseFiles("assets/form.html")
+	if err != nil {
+		panic(err)
+	}
+
+	emailTemplate, err = template.ParseFiles("assets/email.html")
 	if err != nil {
 		panic(err)
 	}

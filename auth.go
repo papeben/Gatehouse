@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"database/sql"
 	"fmt"
@@ -205,7 +206,7 @@ func ConfirmEmailCode(code string) bool {
 	}
 }
 
-func SendEmailConfirmationCode(userID string, email string) {
+func SendEmailConfirmationCode(userID string, email string, username string) {
 	code := GenerateEmailConfirmationToken()
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 	if err != nil {
@@ -216,8 +217,27 @@ func SendEmailConfirmationCode(userID string, email string) {
 	if err != nil {
 		panic(err)
 	}
+
+	var body bytes.Buffer
+	err = emailTemplate.Execute(&body, struct {
+		Title    string
+		Username string
+		Message  string
+		Link     string
+		AppName  string
+	}{
+		Title:    "Confirm your email address",
+		Username: username,
+		Message:  fmt.Sprintf("Thank you for signing up to %s! Please confirm your email by clicking the link below:", appName),
+		Link:     fmt.Sprintf("%s/%s/confirmcode?c=%s", webDomain, functionalPath, code),
+		AppName:  appName,
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	// Email code
-	err = sendMail(email, "Confirm your Email Address", webDomain+"/"+functionalPath+"/confirmcode?c="+code)
+	err = sendMail(email, "Confirm your Email Address", body.String())
 	if err != nil {
 		fmt.Println(err)
 		fmt.Println("Error sending email to " + email + ". Placing link below:")
@@ -321,7 +341,8 @@ func ResetPasswordRequest(email string) bool {
 	defer db.Close()
 
 	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID)
+	var username string
+	err = db.QueryRow(fmt.Sprintf("SELECT id, username FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID, &username)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return false
@@ -335,7 +356,26 @@ func ResetPasswordRequest(email string) bool {
 		if err != nil {
 			panic(err)
 		}
-		err := sendMail(strings.ToLower(email), "Password Reset Request", webDomain+"/"+functionalPath+"/resetpassword?c="+resetCode)
+
+		var body bytes.Buffer
+		err = emailTemplate.Execute(&body, struct {
+			Title    string
+			Username string
+			Message  string
+			Link     string
+			AppName  string
+		}{
+			Title:    "Reset your password",
+			Username: username,
+			Message:  fmt.Sprintf("Click the link below to reset your %s password:", appName),
+			Link:     fmt.Sprintf("%s/%s/resetpassword?c=%s", webDomain, functionalPath, resetCode),
+			AppName:  appName,
+		})
+		if err != nil {
+			panic(err)
+		}
+
+		err := sendMail(strings.ToLower(email), "Password Reset Request", body.String())
 		if err != nil {
 			fmt.Println(err)
 			fmt.Println("Error sending email to " + email + ". Placing link below:")
@@ -409,8 +449,9 @@ func ResendConfirmationEmail(request *http.Request) bool {
 		defer db.Close()
 
 		var userID string
+		var username string
 		var email string
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND email_resent = 0", tablePrefix, tablePrefix), tokenCookie.Value).Scan(&userID, &email)
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND email_resent = 0", tablePrefix, tablePrefix), tokenCookie.Value).Scan(&userID, &email, &username)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return false
@@ -418,7 +459,7 @@ func ResendConfirmationEmail(request *http.Request) bool {
 				panic(err)
 			}
 		} else {
-			SendEmailConfirmationCode(userID, email)
+			SendEmailConfirmationCode(userID, email, username)
 			_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_resent = 1 WHERE id = ?", tablePrefix), userID)
 			if err != nil {
 				panic(err)
