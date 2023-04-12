@@ -38,7 +38,7 @@ var (
 	smtpPass              string = envWithDefault("SMTP_PASS", "")
 	smtpTLS               string = envWithDefault("SMTP_TLS", "FALSE")
 	smtpTLSSkipVerify     string = envWithDefault("SMTP_TLS", "FALSE")
-	senderAddress         string = envWithDefault("MAIL_ADDRESS", "Gatehouse <gatehouse@mydomain.local>")
+	senderAddress         string = envWithDefault("MAIL_ADDRESS", "gatehouse@mydomain.local")
 	webDomain             string = envWithDefault("WEB_DOMAIN", "http://localhost:8080")
 	formTemplate          *template.Template
 	emailTemplate         *template.Template

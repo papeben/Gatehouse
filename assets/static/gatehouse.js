@@ -42,7 +42,7 @@ function initPasswordConf(){
             }
         })
 
-        passwordConfirmInput.addEventListener("change", function(){ // Test passwords match on each change
+        passwordConfirmInput.addEventListener("keyup", function(){ // Test passwords match on each change
             let password = passwordInput.value;
             let passwordConfirm = passwordConfirmInput.value;
             let error = false

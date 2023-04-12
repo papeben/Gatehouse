@@ -291,7 +291,7 @@ func sendMail(to string, subject string, body string) error {
 
 	// Compose the email message
 	message := []byte("To: " + to + "\r\n" +
-		"From: " + from + "\r\n" +
+		"From: " + appName + " <" + from + ">\r\n" +
 		"Subject: " + subject + "\r\n" +
 		"MIME-version: 1.0;\r\n" +
 		"Content-Type: text/html; charset=\"UTF-8\";\r\n" +
