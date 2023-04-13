@@ -68,3 +68,12 @@ func TestGenerateConfirmationToken(t *testing.T) {
 
 	})
 }
+
+func TestSendMail(t *testing.T) {
+	t.Run("should send email to test@testing.local", func(t *testing.T) {
+		err := sendMail("test@testing.local", "Testmail", "This is a test email.")
+		if err != nil {
+			t.Error("Email failed to send.")
+		}
+	})
+}

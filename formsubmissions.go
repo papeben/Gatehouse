@@ -28,7 +28,8 @@ func RegisterSubmission(response http.ResponseWriter, request *http.Request) {
 		if err != nil {
 			panic(err)
 		}
-		SendEmailConfirmationCode(userID, email)
+
+		SendEmailConfirmationCode(userID, email, username)
 		AuthenticateRequestor(response, request, userID)
 
 	} else {
