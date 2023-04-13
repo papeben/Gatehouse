@@ -3,6 +3,6 @@ RUN apk update && \
     apk upgrade
 WORKDIR /app
 COPY Gatehouse .
-COPY assets .
+COPY assets ./assets
 CMD ["./Gatehouse"]
 

@@ -1,0 +1,50 @@
+version: "3"
+
+services:
+  db:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: demo
+    networks:
+      - demo
+
+  web:
+    image: nginx:latest
+    networks:
+      - demo
+
+  mail:
+    image: maildev/maildev:latest
+    ports:
+      - "1080:1080"
+    networks:
+      - demo
+
+  gatehouse:
+    image: papeben/gatehouse:latest
+    networks:
+      - demo
+    environment:
+      MYSQL_HOST: db
+      MYSQL_USER: root
+      MYSQL_PASS: demo
+      SMTP_HOST: mail
+      SMTP_PORT: 1025
+      BACKEND_SERVER: web
+      BACKEND_PORT: 80
+      WEB_DOMAIN: "https://localhost:8443"
+    restart: always
+
+  tls:
+    image: papeben/tls-proxy:latest
+    ports:
+      - "8443:443"
+    environment:
+      TARGET_HOST: gatehouse
+      TARGET_PORT: 8080
+    networks:
+      - demo
+   
+networks:
+  demo: 
+    
