@@ -16,7 +16,7 @@ Gatehouse stores user information in a MySQL compatible database and sends outgo
 │ Web Browser ├───────►  HAProxy/NGINX  ├───────►    Gatehouse     ├───────► Spring/Flask/etc │
 └─────────────┘       └─────────────────┘       └───────▲──────┬───┘       └──────────────────┘
                                                         │      │
-                                                        │ SQL  └────────────────────┐ SNMP
+                                                        │ SQL  └────────────────────┐ SMTP
                                                         │                           │
                                                 ┌───────▼──────────┐       ┌────────▼─────────┐
                                                 │    Database      │       │  Outgoing Mail   │
@@ -25,6 +25,23 @@ Gatehouse stores user information in a MySQL compatible database and sends outgo
 ```
 
 ## Getting Started
+
+There are some examples of Gatehouse deployments included in the `/examples` directory. These use a generic NGINX container as a web application, but this can be substituted for any other web application. MailDEV hosts a testing SMTP server inbox which can be viewed via port 1080 in a web browser.
+
+### Docker Compose 
+
+```
+cd /examples
+docker-compose up --build 
+```
+
+### Kubernetes
+
+```
+cd /examples
+kubectl create namespace gatehouse
+kubectl create -f gatehouse_demo.yml
+```
 
 ## Options and Parameters
 
