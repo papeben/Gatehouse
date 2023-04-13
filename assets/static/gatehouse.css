@@ -77,3 +77,11 @@ body {
     padding: 18px 10px;
     line-height: 20px;
 }
+.gh_div_err_top {
+    position: absolute;
+    padding: 18px 0px;
+    line-height: 20px;
+    text-align: center;
+    border: 1px solid red;
+    border-radius: 5px;
+}

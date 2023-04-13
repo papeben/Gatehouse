@@ -8,6 +8,7 @@ function initGatehouse(){
     initPasswordConf()
     initNewUsername()
     initEmail()
+    checkForError()
 }
 
 function initPasswordConf(){
@@ -114,6 +115,32 @@ function initEmail(){
         })
     }
 }
+
+function checkForError() {
+    var urlParams = new URLSearchParams(window.location.search)
+    var error = urlParams.get('error')
+    var errorDesc = "An unknown error occurred."
+    if (error) {
+        switch (error) {
+            case "invalid":
+                errorDesc = "Invalid Credentials. Please try again."
+                break
+        } 
+
+        var targetInput = document.getElementsByTagName("form")[0]
+        let x = targetInput.getBoundingClientRect().left
+        let y = targetInput.getBoundingClientRect().top
+        let w = targetInput.getBoundingClientRect().width
+
+        var errorMessage = document.createElement('div')
+        errorMessage.innerText = errorDesc
+        errorMessage.classList.add("gh_div_err_top")
+        errorMessage.style.top = String(y - 100) + "px"
+        errorMessage.style.left = String(x) + "px"
+        errorMessage.style.width = String(w - 2) + "px"
+        document.body.appendChild(errorMessage)
+    }
+  }
 
 function createInputError(inputName, message, color="red"){
     if (document.getElementsByName(inputName)[0]){
