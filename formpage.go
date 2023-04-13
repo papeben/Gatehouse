@@ -312,4 +312,22 @@ var (
 		[]OIDCButton{},
 		functionalPath,
 	}
+
+	emailTakenPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Email Already Registered",
+		"Email Already Registered",
+		"/",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("This email has already been registered."),
+			FormCreateDivider(),
+			FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
+			FormCreateHint("Forgotten your details?"),
+			FormCreateButtonLink("/"+functionalPath+"/forgot", "Reset Password"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
 )

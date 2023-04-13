@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 func RegisterSubmission(response http.ResponseWriter, request *http.Request) {
@@ -27,7 +28,8 @@ func RegisterSubmission(response http.ResponseWriter, request *http.Request) {
 		if err != nil {
 			panic(err)
 		}
-		SendEmailConfirmationCode(userID, email)
+
+		SendEmailConfirmationCode(userID, email, username)
 		AuthenticateRequestor(response, request, userID)
 
 	} else {
@@ -120,5 +122,35 @@ func IsValidNewEmail(email string) bool {
 }
 
 func IsValidPassword(password string) bool {
+	// Check length
+	if len(password) < 8 {
+		return false
+	}
+
+	// Check for uppercase letter
+	hasUppercase := false
+	for _, char := range password {
+		if unicode.IsUpper(char) {
+			hasUppercase = true
+			break
+		}
+	}
+	if !hasUppercase {
+		return false
+	}
+
+	// Check for numeric digit
+	hasDigit := false
+	for _, char := range password {
+		if unicode.IsDigit(char) {
+			hasDigit = true
+			break
+		}
+	}
+	if !hasDigit {
+		return false
+	}
+
+	// Password meets all criteria
 	return true
 }

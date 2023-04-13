@@ -1,7 +1,7 @@
 # This workflow will build a golang project
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
 
-name: Short Tests
+name: Test Go
 
 on:
   push:
@@ -20,6 +20,10 @@ jobs:
         options: --health-cmd "mysqladmin ping" --health-interval 10s --health-timeout 5s --health-retries 5
         ports:
           - 3306:3306
+      smtp:
+        image: docker.io/maildev/maildev:latest
+        ports:
+          - 1025:1025
     steps:
     - name: Check out repository code
       uses: actions/checkout@v3
@@ -34,10 +38,16 @@ jobs:
       env:
         MYSQL_USER: root
         MYSQL_PASS: testing
+        SMTP_PORT: 1025
+
+    - name: Run Gosec Security Scanner
+      uses: securego/gosec@master
+      with:
+        args: ./...
 
     - name: Build
-      run: go build -v .
-
-        
-    
+      run: go build -v -a .
+      env:
+        CGO_ENABLED: 0
+      
 
