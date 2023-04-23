@@ -100,6 +100,7 @@ The initial release of Gatehouse will support:
 - URI path access control for unauthenticated users
 - Customisable Form and Email templates
 - Configuration via Environment Variables
+- User-facing account dashboard
 
 ### Priority Additional Features
 
@@ -110,7 +111,6 @@ These are additional features I plan on adding to future releases:
 - CSRF Protection
 - Account security alerts
 - Account action rate limiting
-- User-facing account dashboard
 
 ### Stretch Features
 
