@@ -60,30 +60,30 @@ docker run -p 8080:8080 \
 
 Gatehouse is configured through environment variables. The names and default values of these are listed below:
 
-| Environment Variable	| Purpose |
-| ----------------------|--------------------------|
-| BACKEND_SERVER	| The IP address of the backend server. Default value is 127.0.0.1. |
-| BACKEND_PORT	| The port number of the backend server. Default value is 9000. |
-| LISTEN_PORT	| The port number on which the server will listen. Default value is 8080. |
-| GATEHOUSE_PATH |	The URI path used by Gatehouse features (e.g. /{path}/login). Default value is gatehouse. |
-| APP_NAME	| The name of the application. Default value is Gatehouse. |
-| MYSQL_HOST	| The IP address of the MySQL server. Default value is 127.0.0.1. |
-| MYSQL_PORT	| The port number of the MySQL server. Default value is 3306. |
-| MYSQL_USER	| The username for the MySQL database. Default value is gatehouse. |
-| MYSQL_PASS	| The password for the MySQL user. Default value is password. |
-| MYSQL_DATABASE |	The name of the MySQL database. Default value is gatehouse. |
-| TABLE_PREFIX	| The prefix to be used for all tables in the MySQL database. Default value is gatehouse. |
-| SESSION_COOKIE |	The name of the cookie used for session management. Default value is gatehouse-session. |
-| REQUIRE_AUTH	| Whether authentication is required or not. Default value is TRUE. |
-| REQUIRE_EMAIL_CONFIRM	| Whether email confirmation is required or not. Default value is TRUE. |
-| SMTP_HOST	| The IP address of the SMTP server. Default value is 127.0.0.1. |
-| SMTP_PORT	| The port number of the SMTP server. Default value is 25. |
-| SMTP_USER	| The username for the SMTP server. Default value is an empty string. |
-| SMTP_PASS	| The password for the SMTP server. Default value is an empty string. |
-| SMTP_TLS	| Whether to use TLS encryption for SMTP or not. Default value is FALSE. |
-| SMTP_TLS_SKIP_VERIFY	| Whether to skip verification of the server certificate for SMTP or not. Default value is FALSE. |
-| MAIL_ADDRESS	| The sender email address to be used for all outgoing emails. Default value is gatehouse@mydomain.local. |
-| WEB_DOMAIN	| The domain name of the web application. Default value is http://localhost:8080. |
+| Environment Variable	| Default | Purpose |
+| ----------------------|---------|---------|
+| BACKEND_SERVER	| 127.0.0.1 | The IP address or DNS name of the backend server. |
+| BACKEND_PORT	| 9000 | The port number of the backend server. |
+| LISTEN_PORT	| 8080 | The port number on which the server will listen. |
+| GATEHOUSE_PATH |	gatehouse | The URI path used by Gatehouse features (e.g. /{path}/login). |
+| APP_NAME	| Gatehouse | The name of the application used in emails and webpages. |
+| MYSQL_HOST	| 127.0.0.1 | The IP address or DNS name of the MySQL server. |
+| MYSQL_PORT	| 3306 | The port number of the MySQL server. |
+| MYSQL_USER	| gatehouse | The username for the MySQL database. |
+| MYSQL_PASS	| password | The password for the MySQL user. |
+| MYSQL_DATABASE | gatehouse | The name of the MySQL database. |
+| TABLE_PREFIX	| gatehouse | The prefix to be used for all tables in the MySQL database. |
+| SESSION_COOKIE |	gatehouse-session | The name of the cookie used for session management. |
+| REQUIRE_AUTH	| TRUE | Whether authentication is required or not. |
+| REQUIRE_EMAIL_CONFIRM	| TRUE | Whether email confirmation is required or not. |
+| SMTP_HOST	| 127.0.0.1 | The IP address or DNS name of the SMTP server. |
+| SMTP_PORT	| 25 | The port number of the SMTP server. |
+| SMTP_USER	| *unset* | The username for the SMTP server. |
+| SMTP_PASS	| *unset* | The password for the SMTP server. |
+| SMTP_TLS	| FALSE | Whether to use TLS encryption for SMTP or not. |
+| SMTP_TLS_SKIP_VERIFY	| FALSE | Whether to skip verification of the server certificate for SMTP or not. |
+| MAIL_ADDRESS	| gatehouse@mydomain.local | The sender email address to be used for all outgoing emails. |
+| WEB_DOMAIN	| http://localhost:8080 | The full domain URL of the web application. |
 
 ## Roadmap
 
