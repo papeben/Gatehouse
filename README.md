@@ -2,11 +2,17 @@
 
 ## Overview
 
-Gatehouse is a lightweight HTTP reverse-proxy providing authentication for end users. Designed to be placed in front of your web applications, Gatehouse provides the core account functionality required for most websites. Features include:
+Gatehouse is a lightweight HTTP reverse-proxy providing authentication for end users. Designed to be placed in front of your web applications, Gatehouse provides the core account functionality required for most websites.
+
+Gatehouse proxies HTTP requests depending on whether a user is authenticated or not. Depending on configuration, unauthenticated users will be shown a login page where they can authenticate or register before being granted access to the backend web application. This authentication process can be configured to enable:
 
 - User Registration & Sign-in
-- Email confirmations & Password Resets
+- Email Confirmations
+- Email Password Resets
+- Email and App-based Multi-Factor authentication
 - URI-based access control for unauthenticated users
+
+## Architecture
 
 Gatehouse stores user information in a MySQL compatible database and sends outgoing mail via an SNMP server. Below is an example of Gatehouse used in web infrastructure:
 
@@ -39,6 +45,7 @@ docker-compose up --build
 
 To deploy Gatehouse manually the following supporting infrastructure is required:
 
+- A HTTP web application to protect
 - MySQL compatible database
 - SMTP server
 - Web proxy for TLS termination
@@ -53,6 +60,8 @@ docker run -p 8080:8080 \
     -e MYSQL_PASS UseGoodPasswords \
     -e SMTP_HOST outmail.mynetwork.local \
     -e SMTP_PORT 25 \
+    -e BACKEND_SERVER web.mynetwork.local \
+    -e BACKEND_PORT 80 \
     papeben/gatehouse:latest
 ```
 
