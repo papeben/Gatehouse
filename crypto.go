@@ -36,3 +36,20 @@ func GenerateRandomString(length int) string {
 
 	return string(bytes)
 }
+
+func GenerateRandomNumbers(length int) string {
+	charset := "0123456789"
+	charsetLength := big.NewInt(int64(len(charset)))
+	bytes := make([]byte, length)
+
+	for i := 0; i < length; i++ {
+		num, err := rand.Int(rand.Reader, charsetLength)
+		if err != nil {
+			panic(err)
+		}
+
+		bytes[i] = charset[num.Int64()]
+	}
+
+	return string(bytes)
+}

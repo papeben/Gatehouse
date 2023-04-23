@@ -14,13 +14,15 @@
               <td style="padding: 40px;">
                 <table cellpadding="0" cellspacing="0" border="0" align="center" width="100%" bgcolor="#28a745" style="border-collapse: collapse;">
                   <tr>
-                    <td style="padding: 20px; text-align: center; color: #ffffff; font-size: 24px;">{{ .Title }}</td>
+                    <td style="padding: 20px; text-align: center; color: #ffffff; font-size: 24px;">{{ .AppName }}</td>
                   </tr>
                 </table>
                 <p style="margin-top: 20px; margin-bottom: 20px;">Dear {{ .Username }},</p>
                 <p style="margin-bottom: 20px;">{{ .Message }}</p>
-                <p style="margin-bottom: 20px;"><a href="{{ .Link }}" style="color: #2e6da4; text-decoration: underline;">{{ .Title }}</a></p>
-                <p style="margin-bottom: 20px;">or copy the link directly:<br> {{ .Link }}</p>
+                {{ if .HasLink }}
+                  <p style="margin-bottom: 20px;"><a href="{{ .Link }}" style="color: #2e6da4; text-decoration: underline;">{{ .Title }}</a></p>
+                  <p style="margin-bottom: 20px;">or copy the link directly:<br> {{ .Link }}</p>
+                {{ end }}
                 <p style="margin-bottom: 20px;">If you did not request this action, please ignore this email.</p>
                 <p style="margin-bottom: 20px;">Best regards,<br>The {{ .AppName }} Team</p>
               </td>

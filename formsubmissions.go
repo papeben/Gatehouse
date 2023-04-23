@@ -10,8 +10,8 @@ import (
 )
 
 func RegisterSubmission(response http.ResponseWriter, request *http.Request) {
-	username := request.FormValue("newUsername")
-	email := request.FormValue("email")
+	username := strings.ToLower(request.FormValue("newUsername"))
+	email := strings.ToLower(request.FormValue("email"))
 	password := request.FormValue("password")
 	passwordConfirm := request.FormValue("passwordConfirm")
 
@@ -42,11 +42,13 @@ func RegisterSubmission(response http.ResponseWriter, request *http.Request) {
 
 func LoginSubmission(response http.ResponseWriter, request *http.Request) {
 	var (
-		username     string = request.FormValue("username")
-		password     string = request.FormValue("password")
-		userID       string
-		passwordHash string
-		isValid      bool = false
+		username       string = strings.ToLower(request.FormValue("username"))
+		password       string = request.FormValue("password")
+		userID         string
+		email          string
+		emailConfirmed bool
+		passwordHash   string
+		isValid        bool = false
 	)
 	if username != "" {
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
@@ -55,7 +57,7 @@ func LoginSubmission(response http.ResponseWriter, request *http.Request) {
 		}
 		defer db.Close()
 
-		err = db.QueryRow(fmt.Sprintf("SELECT id, password FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID, &passwordHash)
+		err = db.QueryRow(fmt.Sprintf("SELECT id, email, email_confirmed, password FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID, &email, &emailConfirmed, &passwordHash)
 		if err == nil && CheckPasswordHash(password, passwordHash) {
 			isValid = true
 		} else if err != nil && err != sql.ErrNoRows {
@@ -64,7 +66,11 @@ func LoginSubmission(response http.ResponseWriter, request *http.Request) {
 	}
 
 	if isValid {
-		AuthenticateRequestor(response, request, userID)
+		if mfaEnabled == "TRUE" && emailConfirmed {
+			MfaSession(response, request, userID, username, email)
+		} else {
+			AuthenticateRequestor(response, request, userID)
+		}
 	} else {
 		http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
 	}
@@ -153,4 +159,32 @@ func IsValidPassword(password string) bool {
 
 	// Password meets all criteria
 	return true
+}
+
+func MfaSubmission(response http.ResponseWriter, request *http.Request) {
+	var (
+		mfaToken string = request.FormValue("token")
+		userID   string
+	)
+	mfaSession, err := request.Cookie(mfaCookieName)
+
+	if err == nil {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ? AND token = ? AND created > CURRENT_TIMESTAMP - INTERVAL 1 HOUR AND used = 0", tablePrefix), mfaSession.Value, mfaToken).Scan(&userID)
+		if err == nil {
+			AuthenticateRequestor(response, request, userID)
+		} else if err == sql.ErrNoRows {
+			http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
+		} else {
+			panic(err)
+		}
+	} else {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Invalid request.`)
+	}
 }
