@@ -103,11 +103,12 @@ The initial release of Gatehouse will support:
 
 ### Priority Additional Features
 
-These are additional features I plan on adding to subsequent releases:
+These are additional features I plan on adding to future releases:
 
 - OpenID Connect Authentication with multiple configurable providers
 - Identity JWTs
 - CSRF Protection
+- Account security alerts
 - Account action rate limiting
 - User-facing account dashboard
 
@@ -116,3 +117,4 @@ These are additional features I plan on adding to subsequent releases:
 Features which may be implemented in the future depending on demand:
 
 - Alternative user stores (Postgres, LDAP)
+- User administration portal
