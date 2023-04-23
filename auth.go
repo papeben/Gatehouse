@@ -76,6 +76,28 @@ func GenerateResetToken() string {
 	}
 }
 
+func GenerateMfaSessionToken() string {
+	newToken := GenerateRandomString(32)
+
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	var userID string
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ?", tablePrefix), newToken).Scan(&userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return newToken
+		} else {
+			panic(err)
+		}
+	} else {
+		return GenerateMfaSessionToken()
+	}
+}
+
 func GenerateEmailConfirmationToken() string {
 	newToken := GenerateRandomString(32)
 
@@ -115,6 +137,53 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 	cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
 	http.SetCookie(response, &cookie)
 	http.Redirect(response, request, "/", http.StatusSeeOther)
+}
+
+func MfaSession(response http.ResponseWriter, request *http.Request, userID string, username string, email string) {
+	sessionToken := GenerateMfaSessionToken()
+	mfaToken := GenerateRandomNumbers(6)
+
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, mfaToken)
+	if err != nil {
+		panic(err)
+	}
+
+	cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
+	http.SetCookie(response, &cookie)
+	err = formTemplate.Execute(response, mfaEmailPage)
+
+	var body bytes.Buffer
+	err = emailTemplate.Execute(&body, struct {
+		Title    string
+		Username string
+		Message  string
+		HasLink  bool
+		Link     string
+		AppName  string
+	}{
+		Title:    "MFA Token",
+		Username: username,
+		Message:  fmt.Sprintf("Your MFA code for %s is: %s", appName, mfaToken),
+		HasLink:  false,
+		Link:     "",
+		AppName:  appName,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	err = sendMail(strings.ToLower(email), "Password Reset Request", body.String())
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("Error sending email to " + email + ". Placing MFA code below:")
+		fmt.Println(mfaToken)
+	}
 }
 
 func IsValidSession(request *http.Request) bool {
@@ -223,12 +292,14 @@ func SendEmailConfirmationCode(userID string, email string, username string) {
 		Title    string
 		Username string
 		Message  string
+		HasLink  bool
 		Link     string
 		AppName  string
 	}{
 		Title:    "Confirm your email address",
 		Username: username,
 		Message:  fmt.Sprintf("Thank you for signing up to %s! Please confirm your email by clicking the link below:", appName),
+		HasLink:  true,
 		Link:     fmt.Sprintf("%s/%s/confirmcode?c=%s", webDomain, functionalPath, code),
 		AppName:  appName,
 	})
@@ -362,12 +433,14 @@ func ResetPasswordRequest(email string) bool {
 			Title    string
 			Username string
 			Message  string
+			HasLink  bool
 			Link     string
 			AppName  string
 		}{
 			Title:    "Reset your password",
 			Username: username,
 			Message:  fmt.Sprintf("Click the link below to reset your %s password:", appName),
+			HasLink:  true,
 			Link:     fmt.Sprintf("%s/%s/resetpassword?c=%s", webDomain, functionalPath, resetCode),
 			AppName:  appName,
 		})

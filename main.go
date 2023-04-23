@@ -30,8 +30,10 @@ var (
 	mysqlDatabase         string = envWithDefault("MYSQL_DATABASE", "gatehouse")
 	tablePrefix           string = envWithDefault("TABLE_PREFIX", "gatehouse")
 	sessionCookieName     string = envWithDefault("SESSION_COOKIE", "gatehouse-session")
+	mfaCookieName         string = envWithDefault("SESSION_COOKIE", "gatehouse-mfa")
 	requireAuthentication string = envWithDefault("REQUIRE_AUTH", "TRUE")
 	requireEmailConfirm   string = envWithDefault("REQUIRE_EMAIL_CONFIRM", "TRUE")
+	mfaEnabled            string = envWithDefault("MFA_ENABLED", "TRUE")
 	smtpHost              string = envWithDefault("SMTP_HOST", "127.0.0.1")
 	smtpPort              string = envWithDefault("SMTP_PORT", "25")
 	smtpUser              string = envWithDefault("SMTP_USER", "")
@@ -67,6 +69,7 @@ func main() {
 			"/" + functionalPath + "/submit/login":        "sub_login",
 			"/" + functionalPath + "/submit/resetrequest": "sub_reset_request",
 			"/" + functionalPath + "/submit/reset":        "sub_reset",
+			"/" + functionalPath + "/submit/mfa":          "sub_mfa",
 		},
 	}
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
@@ -166,6 +169,8 @@ func main() {
 					response.WriteHeader(200)
 					fmt.Fprint(response, `Username available.`)
 				}
+			case "sub_mfa":
+				MfaSubmission(response, request)
 			}
 			if err != nil {
 				panic(err)
@@ -220,7 +225,7 @@ func InitDatabase() {
 	if err != nil {
 		panic(err)
 	}
-	_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NULL,`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0,	`tfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+	_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NULL,`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0, `mfa_type` VARCHAR(8) NOT NULL DEFAULT 'email', `mfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 	if err != nil {
 		panic(err)
 	}
@@ -233,6 +238,10 @@ func InitDatabase() {
 		panic(err)
 	}
 	_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_resets` (`reset_token` VARCHAR(32) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`reset_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+	if err != nil {
+		panic(err)
+	}
+	_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_mfa` (`mfa_session` VARCHAR(32) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `type` VARCHAR(8) NOT NULL, `token` VARCHAR(6) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`mfa_session`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 	if err != nil {
 		panic(err)
 	}

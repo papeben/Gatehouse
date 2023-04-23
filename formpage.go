@@ -330,4 +330,21 @@ var (
 		[]OIDCButton{},
 		functionalPath,
 	}
+
+	mfaEmailPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - MFA",
+		"MFA Code Sent",
+		"/" + functionalPath + "/submit/mfa",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("An MFA code has been sent to your email address."),
+			FormCreateHint("Enter the code below:"),
+			FormCreateTextInput("token", "000000"),
+			FormCreateSubmitInput("submit", "Submit"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
 )
