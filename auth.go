@@ -157,6 +157,9 @@ func MfaSession(response http.ResponseWriter, request *http.Request, userID stri
 	cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
 	http.SetCookie(response, &cookie)
 	err = formTemplate.Execute(response, mfaEmailPage)
+	if err != nil {
+		panic(err)
+	}
 
 	var body bytes.Buffer
 	err = emailTemplate.Execute(&body, struct {
