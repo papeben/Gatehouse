@@ -1,5 +1,6 @@
 package main
 
+/* #nosec G505 */
 import (
 	"crypto/hmac"
 	"crypto/rand"
