@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/smtp"
 	"strings"
+
+	"github.com/skip2/go-qrcode"
 )
 
 func GenerateUserID() string {
@@ -541,6 +543,51 @@ func ResendConfirmationEmail(request *http.Request) bool {
 				panic(err)
 			}
 			return true
+		}
+	}
+}
+
+func MfaEnrol(response http.ResponseWriter, request *http.Request) {
+	tokenCookie, err := request.Cookie(sessionCookieName)
+	if err != nil {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		var (
+			userID   string
+			username string
+			email    string
+			mfa_type string
+		)
+
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username, mfa_type FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), tokenCookie.Value).Scan(&userID, &email, &username, &mfa_type)
+		if err != nil && err == sql.ErrNoRows {
+			response.WriteHeader(403)
+			fmt.Fprint(response, `Unauthorized.`)
+		} else if err != nil {
+			panic(err)
+		} else if mfa_type == "token" {
+			response.WriteHeader(400)
+			fmt.Fprint(response, `Token MFA already configured.`)
+		} else {
+			otpSecret := GenerateOTPSecret()
+			otpUrl := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30", appName, email, otpSecret, appName)
+			err := qrcode.WriteFile(otpUrl, qrcode.Medium, 256, "qr.png")
+			if err != nil {
+				panic(err)
+			}
+			_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_secret = ? WHERE id = ?", tablePrefix), otpSecret, userID)
+			if err != nil {
+				panic(err)
+			}
+			response.WriteHeader(200)
+			fmt.Fprint(response, `Check token`)
 		}
 	}
 }

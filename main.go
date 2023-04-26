@@ -63,6 +63,7 @@ func main() {
 			"/" + functionalPath + "/resetpassword":      "reset_password",
 			"/" + functionalPath + "/resendconfirmation": "resend_confirmation",
 			"/" + functionalPath + "/usernametaken":      "username_taken",
+			"/" + functionalPath + "/addmfa":             "add_mfa",
 		},
 		"POST": {
 			"/" + functionalPath + "/submit/register":     "sub_register",
@@ -171,6 +172,8 @@ func main() {
 				}
 			case "sub_mfa":
 				MfaSubmission(response, request)
+			case "add_mfa":
+				MfaEnrol(response, request)
 			}
 			if err != nil {
 				panic(err)
