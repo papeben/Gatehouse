@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/smtp"
@@ -578,7 +579,9 @@ func MfaEnrol(response http.ResponseWriter, request *http.Request) {
 		} else {
 			otpSecret := GenerateOTPSecret()
 			otpUrl := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30", appName, email, otpSecret, appName)
-			err := qrcode.WriteFile(otpUrl, qrcode.Medium, 256, "qr.png")
+			var png []byte
+			png, err = qrcode.Encode(otpUrl, qrcode.Medium, 256)
+			png64 := base64.StdEncoding.EncodeToString(png)
 			if err != nil {
 				panic(err)
 			}
@@ -586,8 +589,25 @@ func MfaEnrol(response http.ResponseWriter, request *http.Request) {
 			if err != nil {
 				panic(err)
 			}
-			response.WriteHeader(200)
-			fmt.Fprint(response, `Check token`)
+
+			var enrolPage GatehouseForm = GatehouseForm{ // Define forgot password page
+				appName + " - OTP Token",
+				"Setup Authenticator",
+				"/" + functionalPath + "/submit/validatemfa",
+				"POST",
+				[]GatehouseFormElement{
+					FormCreateDivider(),
+					FormCreateHint("To set up a OTP token, scan this QR code with a compatible authenticator app."),
+					FormCreateQR(png64),
+					FormCreateHint("Once added, enter the current code into the text box and confirm."),
+					FormCreateTextInput("otp", "123456"),
+					FormCreateSubmitInput("submit", "Confirm"),
+					FormCreateDivider(),
+				},
+				[]OIDCButton{},
+				functionalPath,
+			}
+			formTemplate.Execute(response, enrolPage)
 		}
 	}
 }

@@ -16,6 +16,7 @@ type GatehouseFormElement struct {
 	IsLink           bool
 	LinkURI          string
 	IsInput          bool
+	IsImage          bool
 	InputType        string
 	InputName        string
 	InputPlaceholder string
@@ -36,6 +37,7 @@ func FormCreateTextInput(name string, placeholder string) GatehouseFormElement {
 		false,
 		"",
 		true,
+		false,
 		"text",
 		name,
 		placeholder,
@@ -48,6 +50,7 @@ func FormCreatePasswordInput(name string, placeholder string) GatehouseFormEleme
 		false,
 		"",
 		true,
+		false,
 		"password",
 		name,
 		placeholder,
@@ -60,6 +63,7 @@ func FormCreateSubmitInput(name string, text string) GatehouseFormElement {
 		false,
 		"",
 		true,
+		false,
 		"submit",
 		name,
 		"",
@@ -71,6 +75,7 @@ func FormCreateButtonLink(linkUrl string, text string) GatehouseFormElement {
 		text,
 		true,
 		linkUrl,
+		false,
 		false,
 		"",
 		"",
@@ -84,6 +89,7 @@ func FormCreateSmallLink(linkUrl string, text string) GatehouseFormElement {
 		true,
 		linkUrl,
 		false,
+		false,
 		"",
 		"",
 		"",
@@ -95,6 +101,7 @@ func FormCreateDivider() GatehouseFormElement {
 		"",
 		false,
 		"",
+		false,
 		false,
 		"",
 		"",
@@ -108,6 +115,21 @@ func FormCreateHint(text string) GatehouseFormElement {
 		false,
 		"",
 		false,
+		false,
+		"",
+		"",
+		"",
+	}
+}
+
+func FormCreateQR(b64Data string) GatehouseFormElement {
+	return GatehouseFormElement{
+		"gh_img_qr",
+		b64Data,
+		false,
+		"",
+		false,
+		true,
 		"",
 		"",
 		"",
