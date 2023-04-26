@@ -402,4 +402,33 @@ var (
 		[]OIDCButton{},
 		functionalPath,
 	}
+
+	mfaValidatedPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - MFA Validated",
+		"Success",
+		"/",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Your OTP code was validated successfully! You are now able to sign in with your authenticator OTP in the future."),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Back to Dashboard"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+	mfaFailedPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - MFA Failed",
+		"OTP Incorrect",
+		"/" + functionalPath + "/addmfa",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Your OTP code was not valid, please try adding you MFA device again."),
+			FormCreateButtonLink("/"+functionalPath+"/addmfa", "Try Again"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
 )

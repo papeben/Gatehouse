@@ -561,31 +561,37 @@ func MfaEnrol(response http.ResponseWriter, request *http.Request) {
 		defer db.Close()
 
 		var (
-			userID   string
-			username string
-			email    string
-			mfa_type string
+			userID    string
+			username  string
+			email     string
+			mfaType   string
+			mfaSecret *string
+			otpSecret string
 		)
 
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username, mfa_type FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), tokenCookie.Value).Scan(&userID, &email, &username, &mfa_type)
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username, mfa_type, mfa_secret FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), tokenCookie.Value).Scan(&userID, &email, &username, &mfaType, &mfaSecret)
 		if err != nil && err == sql.ErrNoRows {
 			response.WriteHeader(403)
 			fmt.Fprint(response, `Unauthorized.`)
 		} else if err != nil {
 			panic(err)
-		} else if mfa_type == "token" {
+		} else if mfaType == "token" {
 			response.WriteHeader(400)
 			fmt.Fprint(response, `Token MFA already configured.`)
 		} else {
-			otpSecret := GenerateOTPSecret()
+			if mfaSecret == nil {
+				otpSecret = GenerateOTPSecret()
+				_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_secret = ? WHERE id = ?", tablePrefix), otpSecret, userID)
+				if err != nil {
+					panic(err)
+				}
+			} else {
+				otpSecret = *mfaSecret
+			}
 			otpUrl := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30", appName, email, otpSecret, appName)
 			var png []byte
 			png, err = qrcode.Encode(otpUrl, qrcode.Medium, 256)
 			png64 := base64.StdEncoding.EncodeToString(png)
-			if err != nil {
-				panic(err)
-			}
-			_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_secret = ? WHERE id = ?", tablePrefix), otpSecret, userID)
 			if err != nil {
 				panic(err)
 			}

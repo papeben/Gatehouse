@@ -71,6 +71,7 @@ func main() {
 			"/" + functionalPath + "/submit/resetrequest": "sub_reset_request",
 			"/" + functionalPath + "/submit/reset":        "sub_reset",
 			"/" + functionalPath + "/submit/mfa":          "sub_mfa",
+			"/" + functionalPath + "/submit/validatemfa":  "sub_otp_validate",
 		},
 	}
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
@@ -174,6 +175,8 @@ func main() {
 				MfaSubmission(response, request)
 			case "add_mfa":
 				MfaEnrol(response, request)
+			case "sub_otp_validate":
+				MfaValidate(response, request)
 			}
 			if err != nil {
 				panic(err)
