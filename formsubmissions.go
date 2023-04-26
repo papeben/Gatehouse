@@ -215,9 +215,15 @@ func MfaValidate(response http.ResponseWriter, request *http.Request) {
 				if err != nil {
 					panic(err)
 				}
-				formTemplate.Execute(response, mfaValidatedPage)
+				err = formTemplate.Execute(response, mfaValidatedPage)
+				if err != nil {
+					panic(err)
+				}
 			} else {
-				formTemplate.Execute(response, mfaFailedPage)
+				err = formTemplate.Execute(response, mfaFailedPage)
+				if err != nil {
+					panic(err)
+				}
 			}
 		} else if err == sql.ErrNoRows {
 			response.WriteHeader(403)

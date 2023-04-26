@@ -613,7 +613,10 @@ func MfaEnrol(response http.ResponseWriter, request *http.Request) {
 				[]OIDCButton{},
 				functionalPath,
 			}
-			formTemplate.Execute(response, enrolPage)
+			err = formTemplate.Execute(response, enrolPage)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 }
