@@ -8,7 +8,7 @@ on:
     branches: [ "*" ]
 
 jobs:
-  Unit Tests:
+  Unit_Tests:
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -38,7 +38,7 @@ jobs:
         MYSQL_PASS: testing
         SMTP_PORT: 1025
 
-  Code Quality:
+  Code_Quality:
     runs-on: ubuntu-latest
     steps:
     - name: Check out repository code
@@ -70,7 +70,7 @@ jobs:
       env:
         CGO_ENABLED: 0
 
-  Docker Package:
+  Docker_Package:
     runs-on: ubuntu-20.04
     steps:
     - name: Checkout code
