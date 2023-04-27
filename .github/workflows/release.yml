@@ -5,7 +5,7 @@ on:
     tags: ["*"]
 
 jobs:
-  build:
+  Build Dockerhub Image:
     runs-on: ubuntu-latest
     steps:
     - name: Check out repository code
