@@ -16,6 +16,7 @@ type GatehouseFormElement struct {
 	IsLink           bool
 	LinkURI          string
 	IsInput          bool
+	IsImage          bool
 	InputType        string
 	InputName        string
 	InputPlaceholder string
@@ -36,6 +37,7 @@ func FormCreateTextInput(name string, placeholder string) GatehouseFormElement {
 		false,
 		"",
 		true,
+		false,
 		"text",
 		name,
 		placeholder,
@@ -48,6 +50,7 @@ func FormCreatePasswordInput(name string, placeholder string) GatehouseFormEleme
 		false,
 		"",
 		true,
+		false,
 		"password",
 		name,
 		placeholder,
@@ -60,6 +63,7 @@ func FormCreateSubmitInput(name string, text string) GatehouseFormElement {
 		false,
 		"",
 		true,
+		false,
 		"submit",
 		name,
 		"",
@@ -71,6 +75,7 @@ func FormCreateButtonLink(linkUrl string, text string) GatehouseFormElement {
 		text,
 		true,
 		linkUrl,
+		false,
 		false,
 		"",
 		"",
@@ -84,6 +89,7 @@ func FormCreateSmallLink(linkUrl string, text string) GatehouseFormElement {
 		true,
 		linkUrl,
 		false,
+		false,
 		"",
 		"",
 		"",
@@ -95,6 +101,7 @@ func FormCreateDivider() GatehouseFormElement {
 		"",
 		false,
 		"",
+		false,
 		false,
 		"",
 		"",
@@ -108,6 +115,21 @@ func FormCreateHint(text string) GatehouseFormElement {
 		false,
 		"",
 		false,
+		false,
+		"",
+		"",
+		"",
+	}
+}
+
+func FormCreateQR(b64Data string) GatehouseFormElement {
+	return GatehouseFormElement{
+		"gh_img_qr",
+		b64Data,
+		false,
+		"",
+		false,
+		true,
 		"",
 		"",
 		"",
@@ -342,6 +364,85 @@ var (
 			FormCreateHint("Enter the code below:"),
 			FormCreateTextInput("token", "000000"),
 			FormCreateSubmitInput("submit", "Submit"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	mfaTokenPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - MFA",
+		"Enter TOTP",
+		"/" + functionalPath + "/submit/mfa",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("A timed-based one-time password is needed from your registered two-factor device."),
+			FormCreateHint("Enter the code below:"),
+			FormCreateTextInput("token", "000000"),
+			FormCreateSubmitInput("submit", "Submit"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	areYouSurePage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Confirm",
+		"Confirm Action",
+		"/" + functionalPath + "/submit/needstobereplaced",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Are you sure you wish to proceed?"),
+			FormCreateSubmitInput("submit", "Yes"),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "No, take me back!"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	criticalActionAuthPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Reauthenticate",
+		"Confirm Password",
+		"/" + functionalPath + "/submit/criticalauth",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("You must reauthenticate to perform this action."),
+			FormCreatePasswordInput("password", "Password"),
+			FormCreateSubmitInput("submit", "Submit"),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Cancel"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	mfaValidatedPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - MFA Validated",
+		"Success",
+		"/",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Your OTP code was validated successfully! You are now able to sign in with your authenticator OTP in the future."),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Back to Dashboard"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+	mfaFailedPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - MFA Failed",
+		"OTP Incorrect",
+		"/" + functionalPath + "/addmfa",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Your OTP code was not valid, please try adding you MFA device again."),
+			FormCreateButtonLink("/"+functionalPath+"/addmfa", "Try Again"),
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},

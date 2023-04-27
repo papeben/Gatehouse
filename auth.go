@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"crypto/tls"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/smtp"
 	"strings"
+
+	"github.com/skip2/go-qrcode"
 )
 
 func GenerateUserID() string {
@@ -139,9 +142,10 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 	http.Redirect(response, request, "/", http.StatusSeeOther)
 }
 
-func MfaSession(response http.ResponseWriter, request *http.Request, userID string, username string, email string) {
+func MfaSession(response http.ResponseWriter, request *http.Request, userID string, username string, email string, mfaType string) {
 	sessionToken := GenerateMfaSessionToken()
-	mfaToken := GenerateRandomNumbers(6)
+	cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
+	http.SetCookie(response, &cookie)
 
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 	if err != nil {
@@ -149,41 +153,56 @@ func MfaSession(response http.ResponseWriter, request *http.Request, userID stri
 	}
 	defer db.Close()
 
-	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, mfaToken)
-	if err != nil {
-		panic(err)
+	if mfaType == "email" {
+		mfaToken := GenerateRandomNumbers(6)
+
+		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, mfaToken)
+		if err != nil {
+			panic(err)
+		}
+
+		var body bytes.Buffer
+		err = emailTemplate.Execute(&body, struct {
+			Title    string
+			Username string
+			Message  string
+			HasLink  bool
+			Link     string
+			AppName  string
+		}{
+			Title:    "MFA Token",
+			Username: username,
+			Message:  fmt.Sprintf("Your MFA code for %s is: %s", appName, mfaToken),
+			HasLink:  false,
+			Link:     "",
+			AppName:  appName,
+		})
+		if err != nil {
+			panic(err)
+		}
+
+		err = sendMail(strings.ToLower(email), "Password Reset Request", body.String())
+		if err != nil {
+			fmt.Println(err)
+			fmt.Println("Error sending email to " + email + ". Placing MFA code below:")
+			fmt.Println(mfaToken)
+		}
+
+		err = formTemplate.Execute(response, mfaEmailPage)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, "")
+		if err != nil {
+			panic(err)
+		}
+		err = formTemplate.Execute(response, mfaTokenPage)
+		if err != nil {
+			panic(err)
+		}
 	}
 
-	cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
-	http.SetCookie(response, &cookie)
-	err = formTemplate.Execute(response, mfaEmailPage)
-
-	var body bytes.Buffer
-	err = emailTemplate.Execute(&body, struct {
-		Title    string
-		Username string
-		Message  string
-		HasLink  bool
-		Link     string
-		AppName  string
-	}{
-		Title:    "MFA Token",
-		Username: username,
-		Message:  fmt.Sprintf("Your MFA code for %s is: %s", appName, mfaToken),
-		HasLink:  false,
-		Link:     "",
-		AppName:  appName,
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	err = sendMail(strings.ToLower(email), "Password Reset Request", body.String())
-	if err != nil {
-		fmt.Println(err)
-		fmt.Println("Error sending email to " + email + ". Placing MFA code below:")
-		fmt.Println(mfaToken)
-	}
 }
 
 func IsValidSession(request *http.Request) bool {
@@ -538,6 +557,79 @@ func ResendConfirmationEmail(request *http.Request) bool {
 				panic(err)
 			}
 			return true
+		}
+	}
+}
+
+func MfaEnrol(response http.ResponseWriter, request *http.Request) {
+	tokenCookie, err := request.Cookie(sessionCookieName)
+	if err != nil {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		var (
+			userID    string
+			username  string
+			email     string
+			mfaType   string
+			mfaSecret *string
+			otpSecret string
+		)
+
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username, mfa_type, mfa_secret FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), tokenCookie.Value).Scan(&userID, &email, &username, &mfaType, &mfaSecret)
+		if err != nil && err == sql.ErrNoRows {
+			response.WriteHeader(403)
+			fmt.Fprint(response, `Unauthorized.`)
+		} else if err != nil {
+			panic(err)
+		} else if mfaType == "token" {
+			response.WriteHeader(400)
+			fmt.Fprint(response, `Token MFA already configured.`)
+		} else {
+			if mfaSecret == nil {
+				otpSecret = GenerateOTPSecret()
+				_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_secret = ? WHERE id = ?", tablePrefix), otpSecret, userID)
+				if err != nil {
+					panic(err)
+				}
+			} else {
+				otpSecret = *mfaSecret
+			}
+			otpUrl := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30", appName, email, otpSecret, appName)
+			var png []byte
+			png, err = qrcode.Encode(otpUrl, qrcode.Medium, 256)
+			png64 := base64.StdEncoding.EncodeToString(png)
+			if err != nil {
+				panic(err)
+			}
+
+			var enrolPage GatehouseForm = GatehouseForm{ // Define forgot password page
+				appName + " - OTP Token",
+				"Setup Authenticator",
+				"/" + functionalPath + "/submit/validatemfa",
+				"POST",
+				[]GatehouseFormElement{
+					FormCreateDivider(),
+					FormCreateHint("To set up a OTP token, scan this QR code with a compatible authenticator app."),
+					FormCreateQR(png64),
+					FormCreateHint("Once added, enter the current code into the text box and confirm."),
+					FormCreateTextInput("otp", "123456"),
+					FormCreateSubmitInput("submit", "Confirm"),
+					FormCreateDivider(),
+				},
+				[]OIDCButton{},
+				functionalPath,
+			}
+			err = formTemplate.Execute(response, enrolPage)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 }

@@ -69,7 +69,7 @@ body {
 }
 .gh_div_hint {
     font-size: 16px;
-    max-width: 264px;
+    max-width: 300px;
     margin: 5px 0px;
 }
 .gh_div_err {
@@ -84,4 +84,10 @@ body {
     text-align: center;
     border: 1px solid red;
     border-radius: 5px;
+}
+.gh_img_qr {
+    width: 180px;
+    height: 180px;
+    margin: 0px 60px;
+    text-align: center;
 }
