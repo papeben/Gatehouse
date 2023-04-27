@@ -370,6 +370,23 @@ var (
 		functionalPath,
 	}
 
+	mfaTokenPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - MFA",
+		"Enter TOTP",
+		"/" + functionalPath + "/submit/mfa",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("A timed-based one-time password is needed from your registered two-factor device."),
+			FormCreateHint("Enter the code below:"),
+			FormCreateTextInput("token", "000000"),
+			FormCreateSubmitInput("submit", "Submit"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
 	areYouSurePage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - Confirm",
 		"Confirm Action",

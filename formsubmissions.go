@@ -48,7 +48,7 @@ func LoginSubmission(response http.ResponseWriter, request *http.Request) {
 		email          string
 		emailConfirmed bool
 		passwordHash   string
-		isValid        bool = false
+		mfaType        string
 	)
 	if username != "" {
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
@@ -57,22 +57,25 @@ func LoginSubmission(response http.ResponseWriter, request *http.Request) {
 		}
 		defer db.Close()
 
-		err = db.QueryRow(fmt.Sprintf("SELECT id, email, email_confirmed, password FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID, &email, &emailConfirmed, &passwordHash)
-		if err == nil && CheckPasswordHash(password, passwordHash) {
-			isValid = true
+		err = db.QueryRow(fmt.Sprintf("SELECT id, email, email_confirmed, password, mfa_type FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID, &email, &emailConfirmed, &passwordHash, &mfaType)
+		if err != nil && err == sql.ErrNoRows {
+			http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
 		} else if err != nil && err != sql.ErrNoRows {
 			panic(err)
+		} else if err == nil {
+			passwordValid := CheckPasswordHash(password, passwordHash)
+			if !passwordValid {
+				http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
+			} else if mfaEnabled == "TRUE" && mfaType == "email" && emailConfirmed {
+				MfaSession(response, request, userID, username, email, mfaType)
+			} else if mfaEnabled == "TRUE" && mfaType == "email" && !emailConfirmed {
+				AuthenticateRequestor(response, request, userID)
+			} else if mfaEnabled == "TRUE" && mfaType == "token" {
+				MfaSession(response, request, userID, username, email, mfaType)
+			} else {
+				AuthenticateRequestor(response, request, userID)
+			}
 		}
-	}
-
-	if isValid {
-		if mfaEnabled == "TRUE" && emailConfirmed {
-			MfaSession(response, request, userID, username, email)
-		} else {
-			AuthenticateRequestor(response, request, userID)
-		}
-	} else {
-		http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
 	}
 
 }
@@ -163,8 +166,11 @@ func IsValidPassword(password string) bool {
 
 func MfaSubmission(response http.ResponseWriter, request *http.Request) {
 	var (
-		mfaToken string = request.FormValue("token")
-		userID   string
+		mfaToken       string = request.FormValue("token")
+		mfaType        string
+		mfaStoredToken string
+		mfaSecret      string
+		userID         string
 	)
 	mfaSession, err := request.Cookie(mfaCookieName)
 
@@ -175,13 +181,30 @@ func MfaSubmission(response http.ResponseWriter, request *http.Request) {
 		}
 		defer db.Close()
 
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ? AND token = ? AND created > CURRENT_TIMESTAMP - INTERVAL 1 HOUR AND used = 0", tablePrefix), mfaSession.Value, mfaToken).Scan(&userID)
-		if err == nil {
-			AuthenticateRequestor(response, request, userID)
-		} else if err == sql.ErrNoRows {
-			http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
-		} else {
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, token, mfa_type, mfa_secret FROM %s_mfa INNER JOIN %s_accounts ON user_id = id WHERE mfa_session = ? AND created > CURRENT_TIMESTAMP - INTERVAL 1 HOUR AND used = 0", tablePrefix, tablePrefix), mfaSession.Value).Scan(&userID, &mfaStoredToken, &mfaType, &mfaSecret)
+		if err != nil && err != sql.ErrNoRows {
 			panic(err)
+		} else if err == sql.ErrNoRows {
+			response.WriteHeader(400)
+			fmt.Fprint(response, `Invalid request.`)
+		} else if mfaType == "email" && mfaStoredToken == mfaToken {
+			AuthenticateRequestor(response, request, userID)
+		} else if mfaType == "token" {
+			otp, _ := GenerateOTP(mfaSecret, 30)
+			if otp == mfaToken {
+				AuthenticateRequestor(response, request, userID)
+			} else {
+				http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
+			}
+		} else {
+			http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
+		}
+
+		if err == nil {
+			_, err = db.Exec(fmt.Sprintf("UPDATE %s_mfa SET used = 1 WHERE mfa_session = ?", tablePrefix), mfaSession.Value)
+			if err != nil {
+				panic(err)
+			}
 		}
 	} else {
 		response.WriteHeader(400)
