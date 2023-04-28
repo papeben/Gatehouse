@@ -37,7 +37,11 @@ jobs:
 
     - name: Update coverage badge
       uses: ncruces/go-coverage-report@main
-
+      env:
+        MYSQL_USER: root
+        MYSQL_PASS: testing
+        SMTP_PORT: 1025
+        
   Code_Quality:
     runs-on: ubuntu-latest
     steps:
