@@ -125,12 +125,10 @@ func GenerateUserID() string {
 
 	var userID string
 	err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE id = ?", tablePrefix), strings.ToLower(newID)).Scan(&userID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return newID
-		} else {
-			panic(err)
-		}
+	if err == sql.ErrNoRows {
+		return newID
+	} else if err != nil {
+		panic(err)
 	} else {
 		return GenerateUserID()
 	}
@@ -138,21 +136,17 @@ func GenerateUserID() string {
 
 func GenerateSessionToken() string {
 	newToken := GenerateRandomString(64)
-
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
-
 	var userID string
 	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions WHERE session_token = ?", tablePrefix), newToken).Scan(&userID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return newToken
-		} else {
-			panic(err)
-		}
+	if err == sql.ErrNoRows {
+		return newToken
+	} else if err != nil {
+		panic(err)
 	} else {
 		return GenerateSessionToken()
 	}
@@ -169,12 +163,10 @@ func GenerateResetToken() string {
 
 	var userID string
 	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ?", tablePrefix), newToken).Scan(&userID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return newToken
-		} else {
-			panic(err)
-		}
+	if err == sql.ErrNoRows {
+		return newToken
+	} else if err != nil {
+		panic(err)
 	} else {
 		return GenerateResetToken()
 	}
@@ -191,12 +183,10 @@ func GenerateMfaSessionToken() string {
 
 	var userID string
 	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ?", tablePrefix), newToken).Scan(&userID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return newToken
-		} else {
-			panic(err)
-		}
+	if err == sql.ErrNoRows {
+		return newToken
+	} else if err != nil {
+		panic(err)
 	} else {
 		return GenerateMfaSessionToken()
 	}
@@ -213,12 +203,10 @@ func GenerateEmailConfirmationToken() string {
 
 	var userID string
 	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_confirmations WHERE confirmation_token = ?", tablePrefix), newToken).Scan(&userID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return strings.ToLower(newToken)
-		} else {
-			panic(err)
-		}
+	if err == sql.ErrNoRows {
+		return strings.ToLower(newToken)
+	} else if err != nil {
+		panic(err)
 	} else {
 		return GenerateEmailConfirmationToken()
 	}
