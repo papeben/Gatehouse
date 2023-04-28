@@ -1,4 +1,6 @@
 # Gatehouse
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/papeben/gatehouse/test-go.yml)
+![Language](https://img.shields.io/github/languages/top/papeben/gatehouse)
 
 ## Overview
 
