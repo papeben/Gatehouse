@@ -73,25 +73,20 @@ func ConfirmEmailCode(code string) bool {
 		panic(err)
 	}
 	defer db.Close()
-
 	var isTokenUsed bool
 	err = db.QueryRow(fmt.Sprintf("SELECT used FROM %s_confirmations WHERE confirmation_token = ?", tablePrefix), code).Scan(&isTokenUsed)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return false
-		} else {
+	if err == sql.ErrNoRows {
+		return false
+	} else if err != nil {
+		panic(err)
+	} else if isTokenUsed {
+		return false
+	} else {
+		_, err := db.Exec(fmt.Sprintf("UPDATE %s_accounts INNER JOIN %s_confirmations ON user_id = id SET email_confirmed = 1, used = 1 WHERE confirmation_token = ?", tablePrefix, tablePrefix), code)
+		if err != nil {
 			panic(err)
 		}
-	} else {
-		if isTokenUsed {
-			return false
-		} else {
-			_, err := db.Exec(fmt.Sprintf("UPDATE %s_accounts INNER JOIN %s_confirmations ON user_id = id SET email_confirmed = 1, used = 1 WHERE confirmation_token = ?", tablePrefix, tablePrefix), code)
-			if err != nil {
-				panic(err)
-			}
-			return true
-		}
+		return true
 	}
 }
 
@@ -287,12 +282,10 @@ func IsValidResetCode(code string) bool {
 
 	var userID string
 	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ? AND used = 0", tablePrefix), code).Scan(&userID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return false
-		} else {
-			panic(err)
-		}
+	if err == sql.ErrNoRows {
+		return false
+	} else if err != nil {
+		panic(err)
 	} else {
 		return true
 	}
