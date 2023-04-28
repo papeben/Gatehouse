@@ -318,7 +318,9 @@ func ResendConfirmationEmail(sessionToken string) bool {
 
 func IsValidNewUsername(username string) bool {
 	match, _ := regexp.MatchString("^[a-zA-Z0-9\\-_]{1,32}$", username)
-	if match {
+	if !match {
+		return false
+	} else {
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 		if err != nil {
 			panic(err)
@@ -327,23 +329,21 @@ func IsValidNewUsername(username string) bool {
 
 		var userID string
 		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return true
-			} else {
-				panic(err)
-			}
+		if err == sql.ErrNoRows {
+			return true
+		} else if err != nil {
+			panic(err)
 		} else {
 			return false
 		}
-	} else {
-		return false
 	}
 }
 
 func IsValidNewEmail(email string) bool {
 	match, _ := regexp.MatchString(`^[\w!#$%&'*+/=?^_{|}~-]+(\.[\w!#$%&'*+/=?^_{|}~-]+)*@[a-zA-Z0-9]+(\.[a-zA-Z0-9-]+)*(\.[a-zA-Z]{2,})$`, email)
-	if match {
+	if !match {
+		return false
+	} else {
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 		if err != nil {
 			panic(err)
@@ -352,17 +352,13 @@ func IsValidNewEmail(email string) bool {
 
 		var userID string
 		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return true
-			} else {
-				panic(err)
-			}
+		if err == sql.ErrNoRows {
+			return true
+		} else if err != nil {
+			panic(err)
 		} else {
 			return false
 		}
-	} else {
-		return false
 	}
 }
 
@@ -392,10 +388,5 @@ func IsValidPassword(password string) bool {
 			break
 		}
 	}
-	if !hasDigit {
-		return false
-	}
-
-	// Password meets all criteria
-	return true
+	return hasDigit
 }
