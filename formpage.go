@@ -222,7 +222,7 @@ var (
 			FormCreateDivider(),
 			FormCreateHint("A confirmation email has been sent to your registered email address."),
 			FormCreateDivider(),
-			FormCreateHint("Didn't recieve an email?"),
+			FormCreateHint("Didn't receive an email?"),
 			FormCreateButtonLink("/"+functionalPath+"/resendconfirmation", "Resend Confirmation Email"),
 			FormCreateDivider(),
 		},
