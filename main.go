@@ -8,6 +8,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -95,14 +96,19 @@ func main() {
 
 	http.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) { // Create main listener function
 		handler := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load handler associated with URI from functionalURIs map
-		if handler != nil {                                                          // if handler, then use mapped function to handle http request
-			handler.(func(http.ResponseWriter, *http.Request))(response, request)
-		} else if requireAuthentication == "FALSE" || IsValidSession(request) {
-			proxy.ServeHTTP(response, request)
-		} else if requireEmailConfirm == "TRUE" && PendingEmailApproval(request) {
+		tokenCookie, tokenError := request.Cookie(sessionCookieName)
+		var validSession bool = false
+		if tokenError == nil {
+			validSession = IsValidSession(tokenCookie.Value)
+		}
+		if handler != nil {
+			handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
+		} else if !validSession && requireAuthentication != "FALSE" {
+			http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
+		} else if requireEmailConfirm == "TRUE" && validSession && PendingEmailApproval(tokenCookie.Value) {
 			http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
 		} else {
-			http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+			proxy.ServeHTTP(response, request)
 		}
 	})
 

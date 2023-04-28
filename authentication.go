@@ -95,64 +95,39 @@ func MfaSession(response http.ResponseWriter, request *http.Request, userID stri
 
 }
 
-func IsValidSession(request *http.Request) bool {
-	tokenCookie, err := request.Cookie(sessionCookieName)
+func IsValidSession(sessionToken string) bool {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	var userID string
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionToken).Scan(&userID)
+	if err != nil && err == sql.ErrNoRows {
 		return false
+	} else if err != nil {
+		panic(err)
 	} else {
-
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
-		var userID string
-		var emailConfirmed int
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email_confirmed FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), tokenCookie.Value).Scan(&userID, &emailConfirmed)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return false
-			} else {
-				panic(err)
-			}
-		} else {
-			if requireEmailConfirm == "TRUE" && emailConfirmed == 0 {
-				return false
-			} else {
-				return true
-			}
-		}
+		return true
 	}
 }
 
-func PendingEmailApproval(request *http.Request) bool {
-	tokenCookie, err := request.Cookie(sessionCookieName)
+func PendingEmailApproval(sessionToken string) bool {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	var emailConfirmed bool
+	err = db.QueryRow(fmt.Sprintf("SELECT email_confirmed FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionToken).Scan(&emailConfirmed)
+	if err != nil && err != sql.ErrNoRows {
+		panic(err)
+	} else if err == sql.ErrNoRows || emailConfirmed {
 		return false
 	} else {
-
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
-		var emailConfirmed bool
-		err = db.QueryRow(fmt.Sprintf("SELECT email_confirmed FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), tokenCookie.Value).Scan(&emailConfirmed)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return false
-			} else {
-				panic(err)
-			}
-		} else {
-			if emailConfirmed {
-				return false
-			} else {
-				return true
-			}
-		}
+		return true
 	}
 }
 
@@ -418,36 +393,28 @@ func ResetSubmission(request *http.Request) bool {
 	}
 }
 
-func ResendConfirmationEmail(request *http.Request) bool {
-	tokenCookie, err := request.Cookie(sessionCookieName)
+func ResendConfirmationEmail(sessionToken string) bool {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 	if err != nil {
-		return false
-	} else {
+		panic(err)
+	}
+	defer db.Close()
 
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	var userID string
+	var username string
+	var email string
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND email_resent = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID, &email, &username)
+	if err == sql.ErrNoRows {
+		return false
+	} else if err != nil {
+		panic(err)
+	} else {
+		SendEmailConfirmationCode(userID, email, username)
+		_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_resent = 1 WHERE id = ?", tablePrefix), userID)
 		if err != nil {
 			panic(err)
 		}
-		defer db.Close()
-
-		var userID string
-		var username string
-		var email string
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND email_resent = 0", tablePrefix, tablePrefix), tokenCookie.Value).Scan(&userID, &email, &username)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return false
-			} else {
-				panic(err)
-			}
-		} else {
-			SendEmailConfirmationCode(userID, email, username)
-			_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_resent = 1 WHERE id = ?", tablePrefix), userID)
-			if err != nil {
-				panic(err)
-			}
-			return true
-		}
+		return true
 	}
 }
 

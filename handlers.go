@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"path"
 )
 
 func HandleLogin(response http.ResponseWriter, request *http.Request) {
@@ -74,21 +75,21 @@ func HandlePasswordResetCode(response http.ResponseWriter, request *http.Request
 }
 
 func HandleResendConfirmation(response http.ResponseWriter, request *http.Request) {
-	if !IsValidSession(request) && PendingEmailApproval(request) {
-		if ResendConfirmationEmail(request) {
-			err := formTemplate.Execute(response, resendConfirmationPage)
-			if err != nil {
-				panic(err)
-			}
-		} else {
-			err := formTemplate.Execute(response, linkExpired)
-			if err != nil {
-				panic(err)
-			}
+	tokenCookie, err := request.Cookie(sessionCookieName)
+	if err != nil {
+		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
+	} else if IsValidSession(tokenCookie.Value) && PendingEmailApproval(tokenCookie.Value) && ResendConfirmationEmail(tokenCookie.Value) {
+		err := formTemplate.Execute(response, resendConfirmationPage)
+		if err != nil {
+			panic(err)
 		}
-
-	} else {
+	} else if IsValidSession(tokenCookie.Value) && !PendingEmailApproval(tokenCookie.Value) {
 		http.Redirect(response, request, "/", http.StatusSeeOther)
+	} else {
+		err := formTemplate.Execute(response, linkExpired)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
