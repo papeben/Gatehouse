@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"crypto/tls"
 	"database/sql"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/smtp"
+	"regexp"
 	"strings"
-
-	"github.com/skip2/go-qrcode"
+	"unicode"
 )
 
 func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, userID string) {
@@ -30,69 +29,6 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 	cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
 	http.SetCookie(response, &cookie)
 	http.Redirect(response, request, "/", http.StatusSeeOther)
-}
-
-func MfaSession(response http.ResponseWriter, request *http.Request, userID string, username string, email string, mfaType string) {
-	sessionToken := GenerateMfaSessionToken()
-	cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
-	http.SetCookie(response, &cookie)
-
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
-	if mfaType == "email" {
-		mfaToken := GenerateRandomNumbers(6)
-
-		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, mfaToken)
-		if err != nil {
-			panic(err)
-		}
-
-		var body bytes.Buffer
-		err = emailTemplate.Execute(&body, struct {
-			Title    string
-			Username string
-			Message  string
-			HasLink  bool
-			Link     string
-			AppName  string
-		}{
-			Title:    "MFA Token",
-			Username: username,
-			Message:  fmt.Sprintf("Your MFA code for %s is: %s", appName, mfaToken),
-			HasLink:  false,
-			Link:     "",
-			AppName:  appName,
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		err = sendMail(strings.ToLower(email), "Password Reset Request", body.String())
-		if err != nil {
-			fmt.Println(err)
-			fmt.Println("Error sending email to " + email + ". Placing MFA code below:")
-			fmt.Println(mfaToken)
-		}
-
-		err = formTemplate.Execute(response, mfaEmailPage)
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, "")
-		if err != nil {
-			panic(err)
-		}
-		err = formTemplate.Execute(response, mfaTokenPage)
-		if err != nil {
-			panic(err)
-		}
-	}
-
 }
 
 func IsValidSession(sessionToken string) bool {
@@ -418,75 +354,86 @@ func ResendConfirmationEmail(sessionToken string) bool {
 	}
 }
 
-func MfaEnrol(response http.ResponseWriter, request *http.Request) {
-	tokenCookie, err := request.Cookie(sessionCookieName)
-	if err != nil {
-		response.WriteHeader(403)
-		fmt.Fprint(response, `Unauthorized.`)
-	} else {
+func IsValidNewUsername(username string) bool {
+	match, _ := regexp.MatchString("^[a-zA-Z0-9\\-_]{1,32}$", username)
+	if match {
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 		if err != nil {
 			panic(err)
 		}
 		defer db.Close()
 
-		var (
-			userID    string
-			username  string
-			email     string
-			mfaType   string
-			mfaSecret *string
-			otpSecret string
-		)
-
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username, mfa_type, mfa_secret FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), tokenCookie.Value).Scan(&userID, &email, &username, &mfaType, &mfaSecret)
-		if err != nil && err == sql.ErrNoRows {
-			response.WriteHeader(403)
-			fmt.Fprint(response, `Unauthorized.`)
-		} else if err != nil {
-			panic(err)
-		} else if mfaType == "token" {
-			response.WriteHeader(400)
-			fmt.Fprint(response, `Token MFA already configured.`)
-		} else {
-			if mfaSecret == nil {
-				otpSecret = GenerateOTPSecret()
-				_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_secret = ? WHERE id = ?", tablePrefix), otpSecret, userID)
-				if err != nil {
-					panic(err)
-				}
+		var userID string
+		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return true
 			} else {
-				otpSecret = *mfaSecret
-			}
-			otpUrl := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30", appName, email, otpSecret, appName)
-			var png []byte
-			png, err = qrcode.Encode(otpUrl, qrcode.Medium, 256)
-			png64 := base64.StdEncoding.EncodeToString(png)
-			if err != nil {
 				panic(err)
 			}
+		} else {
+			return false
+		}
+	} else {
+		return false
+	}
+}
 
-			var enrolPage GatehouseForm = GatehouseForm{ // Define forgot password page
-				appName + " - OTP Token",
-				"Setup Authenticator",
-				"/" + functionalPath + "/submit/validatemfa",
-				"POST",
-				[]GatehouseFormElement{
-					FormCreateDivider(),
-					FormCreateHint("To set up a OTP token, scan this QR code with a compatible authenticator app."),
-					FormCreateQR(png64),
-					FormCreateHint("Once added, enter the current code into the text box and confirm."),
-					FormCreateTextInput("otp", "123456"),
-					FormCreateSubmitInput("submit", "Confirm"),
-					FormCreateDivider(),
-				},
-				[]OIDCButton{},
-				functionalPath,
-			}
-			err = formTemplate.Execute(response, enrolPage)
-			if err != nil {
+func IsValidNewEmail(email string) bool {
+	match, _ := regexp.MatchString(`^[\w!#$%&'*+/=?^_{|}~-]+(\.[\w!#$%&'*+/=?^_{|}~-]+)*@[a-zA-Z0-9]+(\.[a-zA-Z0-9-]+)*(\.[a-zA-Z]{2,})$`, email)
+	if match {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		var userID string
+		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return true
+			} else {
 				panic(err)
 			}
+		} else {
+			return false
+		}
+	} else {
+		return false
+	}
+}
+
+func IsValidPassword(password string) bool {
+	// Check length
+	if len(password) < 8 {
+		return false
+	}
+
+	// Check for uppercase letter
+	hasUppercase := false
+	for _, char := range password {
+		if unicode.IsUpper(char) {
+			hasUppercase = true
+			break
 		}
 	}
+	if !hasUppercase {
+		return false
+	}
+
+	// Check for numeric digit
+	hasDigit := false
+	for _, char := range password {
+		if unicode.IsDigit(char) {
+			hasDigit = true
+			break
+		}
+	}
+	if !hasDigit {
+		return false
+	}
+
+	// Password meets all criteria
+	return true
 }

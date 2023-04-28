@@ -47,7 +47,7 @@ func TestGenerateOTP(t *testing.T) {
 	secret := GenerateOTPSecret()
 
 	// Generate an OTP for the current time step
-	otp, err := GenerateOTP(secret, 30)
+	otp, err := GenerateOTP(secret, 1)
 	if err != nil {
 		t.Errorf("GenerateOTP() returned an error: %v", err)
 	}
@@ -57,9 +57,9 @@ func TestGenerateOTP(t *testing.T) {
 	}
 
 	// Wait for one time step
-	time.Sleep(30 * time.Second)
+	time.Sleep(1 * time.Second)
 
-	otp2, err := GenerateOTP(secret, 30)
+	otp2, err := GenerateOTP(secret, 1)
 	if err != nil {
 		t.Errorf("GenerateOTP() returned an error: %v", err)
 	}
