@@ -141,6 +141,20 @@ func TestGenerateResetToken(t *testing.T) {
 	})
 }
 
+func TestGenerateMfaSessionToken(t *testing.T) {
+	t.Run("should generate unique sesson token", func(t *testing.T) {
+		token := GenerateMfaSessionToken()
+		if token == "" {
+			t.Errorf("expected non-empty token, but got %q", token)
+		}
+
+		if len(token) != 32 {
+			t.Errorf("expected 32 character token, but got %q", token)
+		}
+
+	})
+}
+
 func TestGenerateConfirmationToken(t *testing.T) {
 	t.Run("should generate unique confirmation token", func(t *testing.T) {
 		token := GenerateEmailConfirmationToken()

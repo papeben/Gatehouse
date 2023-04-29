@@ -12,6 +12,24 @@ import (
 	"github.com/skip2/go-qrcode"
 )
 
+func HandleMain(response http.ResponseWriter, request *http.Request) { // Create main listener function
+	handler := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load handler associated with URI from functionalURIs map
+	tokenCookie, tokenError := request.Cookie(sessionCookieName)
+	var validSession bool = false
+	if tokenError == nil {
+		validSession = IsValidSession(tokenCookie.Value)
+	}
+	if handler != nil {
+		handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
+	} else if !validSession && requireAuthentication {
+		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
+	} else if requireEmailConfirm && validSession && PendingEmailApproval(tokenCookie.Value) {
+		http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
+	} else {
+		proxy.ServeHTTP(response, request)
+	}
+}
+
 func HandleLogin(response http.ResponseWriter, request *http.Request) {
 	err := formTemplate.Execute(response, loginPage)
 	if err != nil {
@@ -56,6 +74,7 @@ func HandleConfirmEmailCode(response http.ResponseWriter, request *http.Request)
 			panic(err)
 		}
 	} else {
+		response.WriteHeader(400)
 		err := formTemplate.Execute(response, linkExpired)
 		if err != nil {
 			panic(err)
@@ -92,6 +111,7 @@ func HandleResendConfirmation(response http.ResponseWriter, request *http.Reques
 	} else if IsValidSession(tokenCookie.Value) && !PendingEmailApproval(tokenCookie.Value) {
 		http.Redirect(response, request, "/", http.StatusSeeOther)
 	} else {
+		response.WriteHeader(400)
 		err := formTemplate.Execute(response, linkExpired)
 		if err != nil {
 			panic(err)
@@ -100,7 +120,7 @@ func HandleResendConfirmation(response http.ResponseWriter, request *http.Reques
 }
 
 func HandleIsUsernameTaken(response http.ResponseWriter, request *http.Request) {
-	if !IsValidNewUsername(request.URL.Query().Get("u")) {
+	if !IsValidNewUsername(strings.ToLower(request.URL.Query().Get("u"))) {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `Username taken.`)
 	} else {
@@ -237,9 +257,9 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 					Link     string
 					AppName  string
 				}{
-					Title:    "MFA Token",
+					Title:    "OTP Token",
 					Username: username,
-					Message:  fmt.Sprintf("Your MFA code for %s is: %s", appName, mfaToken),
+					Message:  fmt.Sprintf("Your OTP code for %s is: %s", appName, mfaToken),
 					HasLink:  false,
 					Link:     "",
 					AppName:  appName,
@@ -248,7 +268,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 					panic(err)
 				}
 
-				err = sendMail(strings.ToLower(email), "Password Reset Request", body.String())
+				err = sendMail(strings.ToLower(email), "Sign In - OTP", body.String())
 				if err != nil {
 					fmt.Println(err)
 					fmt.Println("Error sending email to " + email + ". Placing MFA code below:")
@@ -282,7 +302,19 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 	password := request.FormValue("password")
 	passwordConfirm := request.FormValue("passwordConfirm")
 
-	if IsValidNewUsername(username) && IsValidNewEmail(email) && IsValidPassword(password) && password == passwordConfirm { // Test registration input validity
+	if !IsValidNewUsername(username) {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Invalid Username.`)
+	} else if !IsValidNewEmail(email) {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Invalid email.`)
+	} else if !IsValidPassword(password) {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Invalid Password.`)
+	} else if password != passwordConfirm {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Passwords did not match.`)
+	} else {
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 		if err != nil {
 			panic(err)
@@ -295,9 +327,6 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 		}
 		SendEmailConfirmationCode(userID, email, username)
 		AuthenticateRequestor(response, request, userID)
-	} else {
-		response.WriteHeader(400)
-		fmt.Fprint(response, `400 - Invalid registration details.`)
 	}
 }
 
@@ -356,7 +385,7 @@ func HandleSubOTP(response http.ResponseWriter, request *http.Request) {
 		otpInput       string = request.FormValue("token")
 		mfaType        string
 		mfaStoredToken string
-		mfaSecret      string
+		mfaSecret      *string
 		userID         string
 	)
 	mfaSession, err := request.Cookie(mfaCookieName)
@@ -380,7 +409,7 @@ func HandleSubOTP(response http.ResponseWriter, request *http.Request) {
 		} else if mfaType == "email" && mfaStoredToken == otpInput {
 			AuthenticateRequestor(response, request, userID)
 		} else if mfaType == "token" {
-			otp, _ := GenerateOTP(mfaSecret, 30)
+			otp, _ := GenerateOTP(*mfaSecret, 30)
 			if otp == otpInput {
 				AuthenticateRequestor(response, request, userID)
 			} else {
@@ -439,6 +468,7 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 					panic(err)
 				}
 			} else {
+				response.WriteHeader(400)
 				err = formTemplate.Execute(response, mfaFailedPage)
 				if err != nil {
 					panic(err)
