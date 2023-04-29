@@ -74,6 +74,7 @@ func HandleConfirmEmailCode(response http.ResponseWriter, request *http.Request)
 			panic(err)
 		}
 	} else {
+		response.WriteHeader(400)
 		err := formTemplate.Execute(response, linkExpired)
 		if err != nil {
 			panic(err)
@@ -300,7 +301,19 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 	password := request.FormValue("password")
 	passwordConfirm := request.FormValue("passwordConfirm")
 
-	if IsValidNewUsername(username) && IsValidNewEmail(email) && IsValidPassword(password) && password == passwordConfirm { // Test registration input validity
+	if !IsValidNewUsername(username) {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Invalid Username.`)
+	} else if !IsValidNewEmail(email) {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Invalid email.`)
+	} else if !IsValidPassword(password) {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Invalid Password.`)
+	} else if password != passwordConfirm {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Passwords did not match.`)
+	} else {
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 		if err != nil {
 			panic(err)
@@ -313,9 +326,6 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 		}
 		SendEmailConfirmationCode(userID, email, username)
 		AuthenticateRequestor(response, request, userID)
-	} else {
-		response.WriteHeader(400)
-		fmt.Fprint(response, `400 - Invalid registration details.`)
 	}
 }
 
@@ -374,7 +384,7 @@ func HandleSubOTP(response http.ResponseWriter, request *http.Request) {
 		otpInput       string = request.FormValue("token")
 		mfaType        string
 		mfaStoredToken string
-		mfaSecret      string
+		mfaSecret      *string
 		userID         string
 	)
 	mfaSession, err := request.Cookie(mfaCookieName)
@@ -398,7 +408,7 @@ func HandleSubOTP(response http.ResponseWriter, request *http.Request) {
 		} else if mfaType == "email" && mfaStoredToken == otpInput {
 			AuthenticateRequestor(response, request, userID)
 		} else if mfaType == "token" {
-			otp, _ := GenerateOTP(mfaSecret, 30)
+			otp, _ := GenerateOTP(*mfaSecret, 30)
 			if otp == otpInput {
 				AuthenticateRequestor(response, request, userID)
 			} else {
