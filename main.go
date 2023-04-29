@@ -49,6 +49,7 @@ var (
 
 func main() {
 	InitDatabase()
+	LoadTemplates()
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Configure functional URLs map [Method][Url] = func()
@@ -76,16 +77,6 @@ func main() {
 	}
 
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
-	if err != nil {
-		panic(err)
-	}
-
-	formTemplate, err = template.ParseFiles("assets/form.html") // Preload form page template into memory
-	if err != nil {
-		panic(err)
-	}
-
-	emailTemplate, err = template.ParseFiles("assets/email.html") // Preload email template into memory
 	if err != nil {
 		panic(err)
 	}
@@ -133,8 +124,8 @@ func envWithDefault(variableName string, defaultString string) string {
 
 func envWithDefaultBool(variableName string, defaultBool bool) bool {
 	var (
-		trueValues  []string = []string{"true", "yes"}
-		falseValues []string = []string{"false", "no"}
+		trueValues  []string = []string{"true", "yes", "on"}
+		falseValues []string = []string{"false", "no", "off"}
 	)
 	val := os.Getenv(variableName)
 	if len(val) == 0 {
@@ -157,6 +148,19 @@ func listContains(s []string, str string) bool {
 		}
 	}
 	return false
+}
+
+func LoadTemplates() {
+	var err error
+	formTemplate, err = template.ParseFiles("assets/form.html") // Preload form page template into memory
+	if err != nil {
+		panic(err)
+	}
+
+	emailTemplate, err = template.ParseFiles("assets/email.html") // Preload email template into memory
+	if err != nil {
+		panic(err)
+	}
 }
 
 func InitDatabase() {
