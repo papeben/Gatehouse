@@ -139,6 +139,46 @@ func TestConfirmEmailCode(t *testing.T) {
 	}
 }
 
+func TestSendEmailConfirmationCode(t *testing.T) {
+	LoadTemplates()
+	t.Run("should send only one confirmation email to test@testing.local", func(t *testing.T) {
+		SendEmailConfirmationCode(GenerateUserID(), "test@testing.local", "test")
+	})
+}
+
+func TestResetPasswordRequest(t *testing.T) {
+	LoadTemplates()
+	t.Run("Sending email to registered user test@testing.local", func(t *testing.T) {
+		// Set up the database connection
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			t.Fatalf("Error connecting to database: %v", err)
+		}
+		defer db.Close()
+
+		// Insert a test user with email unconfirmed
+		email := "test@example.local"
+		username := "testingreset"
+		userId := GenerateUserID()
+		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email) VALUES (?, ?, ?)", tablePrefix), userId, username, email)
+		if err != nil {
+			t.Fatalf("Error inserting test user into database: %v", err)
+		}
+		result := ResetPasswordRequest(email)
+		if !result {
+			t.Error("Reset email failed to send.")
+		}
+	})
+
+	t.Run("don't send main to unregistered user unregistered@testing.local", func(t *testing.T) {
+		email := "unregistered@example.local"
+		result := ResetPasswordRequest(email)
+		if result {
+			t.Error("Shouldn't have sent to unregistered email address.")
+		}
+	})
+}
+
 func TestSendMail(t *testing.T) {
 	t.Run("should send email to test@testing.local", func(t *testing.T) {
 		err := sendMail("test@testing.local", "Testmail", "This is a test email.")
