@@ -214,72 +214,65 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 			http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
 		} else if err != nil {
 			panic(err)
-		} else {
-			passwordValid := CheckPasswordHash(password, passwordHash)
-			if !passwordValid {
-				http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
-			} else if mfaEnabled == "TRUE" && (mfaType == "token" || mfaType == "email" && emailConfirmed) {
-				// Begin multifactor session
-				sessionToken := GenerateMfaSessionToken()
-				cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
-				http.SetCookie(response, &cookie)
-				db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		} else if !CheckPasswordHash(password, passwordHash) {
+			http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
+		} else if mfaEnabled == "TRUE" && (mfaType == "token" || mfaType == "email" && emailConfirmed) {
+			// Begin multifactor session
+			sessionToken := GenerateMfaSessionToken()
+			cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
+			http.SetCookie(response, &cookie)
+
+			if mfaType == "email" {
+				mfaToken := GenerateRandomNumbers(6)
+				_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, mfaToken)
 				if err != nil {
 					panic(err)
 				}
-				defer db.Close()
+				var body bytes.Buffer
+				err = emailTemplate.Execute(&body, struct {
+					Title    string
+					Username string
+					Message  string
+					HasLink  bool
+					Link     string
+					AppName  string
+				}{
+					Title:    "MFA Token",
+					Username: username,
+					Message:  fmt.Sprintf("Your MFA code for %s is: %s", appName, mfaToken),
+					HasLink:  false,
+					Link:     "",
+					AppName:  appName,
+				})
+				if err != nil {
+					panic(err)
+				}
 
-				if mfaType == "email" {
-					mfaToken := GenerateRandomNumbers(6)
-					_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, mfaToken)
-					if err != nil {
-						panic(err)
-					}
-					var body bytes.Buffer
-					err = emailTemplate.Execute(&body, struct {
-						Title    string
-						Username string
-						Message  string
-						HasLink  bool
-						Link     string
-						AppName  string
-					}{
-						Title:    "MFA Token",
-						Username: username,
-						Message:  fmt.Sprintf("Your MFA code for %s is: %s", appName, mfaToken),
-						HasLink:  false,
-						Link:     "",
-						AppName:  appName,
-					})
-					if err != nil {
-						panic(err)
-					}
+				err = sendMail(strings.ToLower(email), "Password Reset Request", body.String())
+				if err != nil {
+					fmt.Println(err)
+					fmt.Println("Error sending email to " + email + ". Placing MFA code below:")
+					fmt.Println(mfaToken)
+				}
 
-					err = sendMail(strings.ToLower(email), "Password Reset Request", body.String())
-					if err != nil {
-						fmt.Println(err)
-						fmt.Println("Error sending email to " + email + ". Placing MFA code below:")
-						fmt.Println(mfaToken)
-					}
-
-					err = formTemplate.Execute(response, mfaEmailPage)
-					if err != nil {
-						panic(err)
-					}
-				} else {
-					_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, "")
-					if err != nil {
-						panic(err)
-					}
-					err = formTemplate.Execute(response, mfaTokenPage)
-					if err != nil {
-						panic(err)
-					}
+				err = formTemplate.Execute(response, mfaEmailPage)
+				if err != nil {
+					panic(err)
 				}
 			} else {
-				AuthenticateRequestor(response, request, userID)
+				_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, "")
+				if err != nil {
+					panic(err)
+				}
+				err = formTemplate.Execute(response, mfaTokenPage)
+				if err != nil {
+					panic(err)
+				}
 			}
+		} else {
+			AuthenticateRequestor(response, request, userID)
 		}
+
 	}
 }
 
