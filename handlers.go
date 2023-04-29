@@ -216,7 +216,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 			panic(err)
 		} else if !CheckPasswordHash(password, passwordHash) {
 			http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
-		} else if mfaEnabled == "TRUE" && (mfaType == "token" || mfaType == "email" && emailConfirmed) {
+		} else if mfaEnabled && (mfaType == "token" || mfaType == "email" && emailConfirmed) {
 			// Begin multifactor session
 			sessionToken := GenerateMfaSessionToken()
 			cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
@@ -371,11 +371,6 @@ func HandleSubOTP(response http.ResponseWriter, request *http.Request) {
 		}
 		defer db.Close()
 
-		_, err = db.Exec(fmt.Sprintf("UPDATE %s_mfa SET used = 1 WHERE mfa_session = ?", tablePrefix), mfaSession.Value)
-		if err != nil {
-			panic(err)
-		}
-
 		err = db.QueryRow(fmt.Sprintf("SELECT user_id, token, mfa_type, mfa_secret FROM %s_mfa INNER JOIN %s_accounts ON user_id = id WHERE mfa_session = ? AND created > CURRENT_TIMESTAMP - INTERVAL 1 HOUR AND used = 0", tablePrefix, tablePrefix), mfaSession.Value).Scan(&userID, &mfaStoredToken, &mfaType, &mfaSecret)
 		if err != nil && err != sql.ErrNoRows {
 			panic(err)
@@ -393,6 +388,11 @@ func HandleSubOTP(response http.ResponseWriter, request *http.Request) {
 			}
 		} else {
 			http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
+		}
+
+		_, err = db.Exec(fmt.Sprintf("UPDATE %s_mfa SET used = 1 WHERE mfa_session = ?", tablePrefix), mfaSession.Value)
+		if err != nil {
+			panic(err)
 		}
 	}
 }

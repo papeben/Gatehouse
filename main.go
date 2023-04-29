@@ -32,15 +32,15 @@ var (
 	tablePrefix           string = envWithDefault("TABLE_PREFIX", "gatehouse")
 	sessionCookieName     string = envWithDefault("SESSION_COOKIE", "gatehouse-session")
 	mfaCookieName         string = envWithDefault("SESSION_COOKIE", "gatehouse-mfa")
-	requireAuthentication string = envWithDefault("REQUIRE_AUTH", "TRUE")
-	requireEmailConfirm   string = envWithDefault("REQUIRE_EMAIL_CONFIRM", "TRUE")
-	mfaEnabled            string = envWithDefault("MFA_ENABLED", "TRUE")
+	requireAuthentication bool   = envWithDefaultBool("REQUIRE_AUTH", true)
+	requireEmailConfirm   bool   = envWithDefaultBool("REQUIRE_EMAIL_CONFIRM", true)
+	mfaEnabled            bool   = envWithDefaultBool("MFA_ENABLED", true)
 	smtpHost              string = envWithDefault("SMTP_HOST", "127.0.0.1")
 	smtpPort              string = envWithDefault("SMTP_PORT", "25")
 	smtpUser              string = envWithDefault("SMTP_USER", "")
 	smtpPass              string = envWithDefault("SMTP_PASS", "")
-	smtpTLS               string = envWithDefault("SMTP_TLS", "FALSE")
-	smtpTLSSkipVerify     string = envWithDefault("SMTP_TLS", "FALSE")
+	smtpTLS               bool   = envWithDefaultBool("SMTP_TLS", false)
+	smtpTLSSkipVerify     bool   = envWithDefaultBool("SMTP_TLS_SKIP", false)
 	senderAddress         string = envWithDefault("MAIL_ADDRESS", "gatehouse@mydomain.local")
 	webDomain             string = envWithDefault("WEB_DOMAIN", "http://localhost:8080")
 	formTemplate          *template.Template
@@ -103,9 +103,9 @@ func main() {
 		}
 		if handler != nil {
 			handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
-		} else if !validSession && requireAuthentication != "FALSE" {
+		} else if !validSession && requireAuthentication {
 			http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
-		} else if requireEmailConfirm == "TRUE" && validSession && PendingEmailApproval(tokenCookie.Value) {
+		} else if requireEmailConfirm && validSession && PendingEmailApproval(tokenCookie.Value) {
 			http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
 		} else {
 			proxy.ServeHTTP(response, request)
@@ -122,13 +122,41 @@ func main() {
 	}
 }
 
-func envWithDefault(variableName, defaultString string) string {
+func envWithDefault(variableName string, defaultString string) string {
 	val := os.Getenv(variableName)
 	if len(val) == 0 {
 		return defaultString
 	} else {
 		return val
 	}
+}
+
+func envWithDefaultBool(variableName string, defaultBool bool) bool {
+	var (
+		trueValues  []string = []string{"true", "yes"}
+		falseValues []string = []string{"false", "no"}
+	)
+	val := os.Getenv(variableName)
+	if len(val) == 0 {
+		return defaultBool
+	} else if listContains(trueValues, strings.ToLower(val)) {
+		return true
+	} else if listContains(falseValues, strings.ToLower(val)) {
+		return false
+	} else {
+		fmt.Printf("Invalid true/false value set for %s\n", variableName)
+		os.Exit(1)
+		return false
+	}
+}
+
+func listContains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+	return false
 }
 
 func InitDatabase() {
