@@ -65,6 +65,21 @@ func TestRegistrationFlow(t *testing.T) {
 		}
 	})
 
+	t.Run("Test new username", func(t *testing.T) {
+		req, err := http.NewRequest("GET", path.Join("/"+functionalPath+"/usernametaken?u="+username), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusOK {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected %v, got %v", http.StatusOK, recorder.Code)
+		}
+	})
+
 	t.Run("Submit registration data", func(t *testing.T) {
 		form := url.Values{}
 		form.Add("newUsername", username)
@@ -190,6 +205,36 @@ func TestRegistrationFlow(t *testing.T) {
 		if recorder.Code != http.StatusBadRequest {
 			fmt.Println(recorder.Body)
 			t.Errorf("Expected OK, got %v", recorder.Code)
+		}
+	})
+
+	t.Run("Test username is now unavailable", func(t *testing.T) {
+		req, err := http.NewRequest("GET", path.Join("/"+functionalPath+"/usernametaken?u="+username), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusBadRequest {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected %v, got %v", http.StatusBadRequest, recorder.Code)
+		}
+	})
+
+	t.Run("Get login page", func(t *testing.T) {
+		req, err := http.NewRequest("GET", path.Join("/"+functionalPath+"/login"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusOK {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected %v, got %v", http.StatusOK, recorder.Code)
 		}
 	})
 
@@ -439,6 +484,139 @@ func TestRegistrationFlow(t *testing.T) {
 			t.Errorf("Expected a blank session cookie, but it had a value.")
 		} else if returnedCookies[0].MaxAge != -1 {
 			t.Errorf("Expected a MaxAge of -1")
+		}
+	})
+
+	t.Run("Get forgot password page", func(t *testing.T) {
+		req, err := http.NewRequest("GET", path.Join("/"+functionalPath+"/forgot"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusOK {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected %v, got %v", http.StatusOK, recorder.Code)
+		}
+	})
+
+	t.Run("Send reset request", func(t *testing.T) {
+
+		var mfaSecret string
+		err = db.QueryRow(fmt.Sprintf("SELECT mfa_secret FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ?", tablePrefix, tablePrefix), sessionToken).Scan(&mfaSecret)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Submit login
+		form := url.Values{}
+		form.Add("email", email)
+		req, err := http.NewRequest("POST", path.Join("/", functionalPath, "submit", "resetrequest"), strings.NewReader(form.Encode()))
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusOK {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected ok, got %v", recorder.Code)
+		}
+	})
+
+	t.Run("Use reset link", func(t *testing.T) {
+		var resetToken string
+		err = db.QueryRow(fmt.Sprintf("SELECT reset_token FROM %s_accounts INNER JOIN %s_resets ON user_id = id WHERE email = ?", tablePrefix, tablePrefix), strings.ToLower(email)).Scan(&resetToken)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		req, err := http.NewRequest("GET", path.Join("/"+functionalPath+"/resetpassword?c="+resetToken), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusOK {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected ok, got %v", recorder.Code)
+		}
+	})
+
+	t.Run("Submit invalid password reset", func(t *testing.T) {
+		var resetToken string
+		err = db.QueryRow(fmt.Sprintf("SELECT reset_token FROM %s_accounts INNER JOIN %s_resets ON user_id = id WHERE email = ?", tablePrefix, tablePrefix), strings.ToLower(email)).Scan(&resetToken)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		form := url.Values{}
+		form.Add("password", password)
+		form.Add("passwordConfirm", password+"mismatch")
+		req, err := http.NewRequest("POST", path.Join("/", functionalPath, "submit", "reset?c="+resetToken), strings.NewReader(form.Encode()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusBadRequest {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected %v, got %v", http.StatusBadRequest, recorder.Code)
+		}
+	})
+
+	t.Run("Submit invalid reset code", func(t *testing.T) {
+		resetToken := GenerateResetToken()
+
+		form := url.Values{}
+		form.Add("password", password)
+		form.Add("passwordConfirm", password)
+		req, err := http.NewRequest("POST", path.Join("/", functionalPath, "submit", "reset?c="+resetToken), strings.NewReader(form.Encode()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusForbidden {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected %v, got %v", http.StatusForbidden, recorder.Code)
+		}
+	})
+
+	t.Run("Submit password reset", func(t *testing.T) {
+		var resetToken string
+		err = db.QueryRow(fmt.Sprintf("SELECT reset_token FROM %s_accounts INNER JOIN %s_resets ON user_id = id WHERE email = ?", tablePrefix, tablePrefix), strings.ToLower(email)).Scan(&resetToken)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		form := url.Values{}
+		form.Add("password", password)
+		form.Add("passwordConfirm", password)
+		req, err := http.NewRequest("POST", path.Join("/", functionalPath, "/submit", "reset?c="+resetToken), strings.NewReader(form.Encode()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusOK {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected %v, got %v", http.StatusOK, recorder.Code)
 		}
 	})
 

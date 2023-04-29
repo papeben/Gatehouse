@@ -120,7 +120,7 @@ func HandleResendConfirmation(response http.ResponseWriter, request *http.Reques
 }
 
 func HandleIsUsernameTaken(response http.ResponseWriter, request *http.Request) {
-	if !IsValidNewUsername(request.URL.Query().Get("u")) {
+	if !IsValidNewUsername(strings.ToLower(request.URL.Query().Get("u"))) {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `Username taken.`)
 	} else {
