@@ -467,6 +467,7 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 					panic(err)
 				}
 			} else {
+				response.WriteHeader(400)
 				err = formTemplate.Execute(response, mfaFailedPage)
 				if err != nil {
 					panic(err)
