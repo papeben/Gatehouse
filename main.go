@@ -8,7 +8,6 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"path"
 	"strings"
 	"time"
 
@@ -45,63 +44,23 @@ var (
 	webDomain             string = envWithDefault("WEB_DOMAIN", "http://localhost:8080")
 	formTemplate          *template.Template
 	emailTemplate         *template.Template
+	functionalURIs        map[string]map[string]interface{}
+	proxy                 *httputil.ReverseProxy
 )
 
 func main() {
 	InitDatabase()
 	LoadTemplates()
-
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Configure functional URLs map [Method][Url] = func()
-	functionalURIs := map[string]map[string]interface{}{
-		"GET": {
-			"/" + functionalPath + "/login":              HandleLogin,
-			"/" + functionalPath + "/logout":             HandleLogout,
-			"/" + functionalPath + "/register":           HandleRegister,
-			"/" + functionalPath + "/forgot":             HandleForgotPassword,
-			"/" + functionalPath + "/confirmemail":       HandleConfirmEmail,
-			"/" + functionalPath + "/confirmcode":        HandleConfirmEmailCode,
-			"/" + functionalPath + "/resetpassword":      HandlePasswordResetCode,
-			"/" + functionalPath + "/resendconfirmation": HandleResendConfirmation,
-			"/" + functionalPath + "/usernametaken":      HandleIsUsernameTaken,
-			"/" + functionalPath + "/addmfa":             HandleAddMFA,
-		},
-		"POST": {
-			"/" + functionalPath + "/submit/register":     HandleSubRegister,
-			"/" + functionalPath + "/submit/login":        HandleSubLogin,
-			"/" + functionalPath + "/submit/resetrequest": HandleSubResetRequest,
-			"/" + functionalPath + "/submit/reset":        HandleSubReset,
-			"/" + functionalPath + "/submit/mfa":          HandleSubOTP,
-			"/" + functionalPath + "/submit/validatemfa":  HandleSubMFAValidate,
-		},
-	}
+	LoadFuncionalURIs()
 
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
 	if err != nil {
 		panic(err)
 	}
-
-	proxy := httputil.NewSingleHostReverseProxy(url)
+	proxy = httputil.NewSingleHostReverseProxy(url)
 	staticFiles := http.StripPrefix("/"+functionalPath+"/static/", http.FileServer(http.Dir("./assets/static/")))
-	http.Handle("/"+functionalPath+"/static/", staticFiles)
-
-	http.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) { // Create main listener function
-		handler := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load handler associated with URI from functionalURIs map
-		tokenCookie, tokenError := request.Cookie(sessionCookieName)
-		var validSession bool = false
-		if tokenError == nil {
-			validSession = IsValidSession(tokenCookie.Value)
-		}
-		if handler != nil {
-			handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
-		} else if !validSession && requireAuthentication {
-			http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
-		} else if requireEmailConfirm && validSession && PendingEmailApproval(tokenCookie.Value) {
-			http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
-		} else {
-			proxy.ServeHTTP(response, request)
-		}
-	})
+	http.Handle("/"+functionalPath+"/static/", staticFiles) // If /gatehouse/static, use static assets
+	http.HandleFunc("/", HandleMain)
 
 	server := &http.Server{
 		Addr:              ":" + listenPort,
@@ -160,6 +119,31 @@ func LoadTemplates() {
 	emailTemplate, err = template.ParseFiles("assets/email.html") // Preload email template into memory
 	if err != nil {
 		panic(err)
+	}
+}
+
+func LoadFuncionalURIs() {
+	functionalURIs = map[string]map[string]interface{}{
+		"GET": {
+			"/" + functionalPath + "/login":              HandleLogin,
+			"/" + functionalPath + "/logout":             HandleLogout,
+			"/" + functionalPath + "/register":           HandleRegister,
+			"/" + functionalPath + "/forgot":             HandleForgotPassword,
+			"/" + functionalPath + "/confirmemail":       HandleConfirmEmail,
+			"/" + functionalPath + "/confirmcode":        HandleConfirmEmailCode,
+			"/" + functionalPath + "/resetpassword":      HandlePasswordResetCode,
+			"/" + functionalPath + "/resendconfirmation": HandleResendConfirmation,
+			"/" + functionalPath + "/usernametaken":      HandleIsUsernameTaken,
+			"/" + functionalPath + "/addmfa":             HandleAddMFA,
+		},
+		"POST": {
+			"/" + functionalPath + "/submit/register":     HandleSubRegister,
+			"/" + functionalPath + "/submit/login":        HandleSubLogin,
+			"/" + functionalPath + "/submit/resetrequest": HandleSubResetRequest,
+			"/" + functionalPath + "/submit/reset":        HandleSubReset,
+			"/" + functionalPath + "/submit/mfa":          HandleSubOTP,
+			"/" + functionalPath + "/submit/validatemfa":  HandleSubMFAValidate,
+		},
 	}
 }
 

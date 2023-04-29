@@ -12,6 +12,24 @@ import (
 	"github.com/skip2/go-qrcode"
 )
 
+func HandleMain(response http.ResponseWriter, request *http.Request) { // Create main listener function
+	handler := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load handler associated with URI from functionalURIs map
+	tokenCookie, tokenError := request.Cookie(sessionCookieName)
+	var validSession bool = false
+	if tokenError == nil {
+		validSession = IsValidSession(tokenCookie.Value)
+	}
+	if handler != nil {
+		handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
+	} else if !validSession && requireAuthentication {
+		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
+	} else if requireEmailConfirm && validSession && PendingEmailApproval(tokenCookie.Value) {
+		http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
+	} else {
+		proxy.ServeHTTP(response, request)
+	}
+}
+
 func HandleLogin(response http.ResponseWriter, request *http.Request) {
 	err := formTemplate.Execute(response, loginPage)
 	if err != nil {
