@@ -8,6 +8,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -31,15 +32,15 @@ var (
 	tablePrefix           string = envWithDefault("TABLE_PREFIX", "gatehouse")
 	sessionCookieName     string = envWithDefault("SESSION_COOKIE", "gatehouse-session")
 	mfaCookieName         string = envWithDefault("SESSION_COOKIE", "gatehouse-mfa")
-	requireAuthentication string = envWithDefault("REQUIRE_AUTH", "TRUE")
-	requireEmailConfirm   string = envWithDefault("REQUIRE_EMAIL_CONFIRM", "TRUE")
-	mfaEnabled            string = envWithDefault("MFA_ENABLED", "TRUE")
+	requireAuthentication bool   = envWithDefaultBool("REQUIRE_AUTH", true)
+	requireEmailConfirm   bool   = envWithDefaultBool("REQUIRE_EMAIL_CONFIRM", true)
+	mfaEnabled            bool   = envWithDefaultBool("MFA_ENABLED", true)
 	smtpHost              string = envWithDefault("SMTP_HOST", "127.0.0.1")
 	smtpPort              string = envWithDefault("SMTP_PORT", "25")
 	smtpUser              string = envWithDefault("SMTP_USER", "")
 	smtpPass              string = envWithDefault("SMTP_PASS", "")
-	smtpTLS               string = envWithDefault("SMTP_TLS", "FALSE")
-	smtpTLSSkipVerify     string = envWithDefault("SMTP_TLS", "FALSE")
+	smtpTLS               bool   = envWithDefaultBool("SMTP_TLS", false)
+	smtpTLSSkipVerify     bool   = envWithDefaultBool("SMTP_TLS_SKIP", false)
 	senderAddress         string = envWithDefault("MAIL_ADDRESS", "gatehouse@mydomain.local")
 	webDomain             string = envWithDefault("WEB_DOMAIN", "http://localhost:8080")
 	formTemplate          *template.Template
@@ -50,153 +51,64 @@ func main() {
 	InitDatabase()
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Configure functional URLs
-
-	functionalURIs := map[string]map[string]string{
+	// Configure functional URLs map [Method][Url] = func()
+	functionalURIs := map[string]map[string]interface{}{
 		"GET": {
-			"/" + functionalPath + "/login":              "login",
-			"/" + functionalPath + "/logout":             "logout",
-			"/" + functionalPath + "/register":           "register",
-			"/" + functionalPath + "/forgot":             "forgot",
-			"/" + functionalPath + "/confirmemail":       "confirmemail",
-			"/" + functionalPath + "/confirmcode":        "confirm_email_code",
-			"/" + functionalPath + "/resetpassword":      "reset_password",
-			"/" + functionalPath + "/resendconfirmation": "resend_confirmation",
-			"/" + functionalPath + "/usernametaken":      "username_taken",
-			"/" + functionalPath + "/addmfa":             "add_mfa",
+			"/" + functionalPath + "/login":              HandleLogin,
+			"/" + functionalPath + "/logout":             HandleLogout,
+			"/" + functionalPath + "/register":           HandleRegister,
+			"/" + functionalPath + "/forgot":             HandleForgotPassword,
+			"/" + functionalPath + "/confirmemail":       HandleConfirmEmail,
+			"/" + functionalPath + "/confirmcode":        HandleConfirmEmailCode,
+			"/" + functionalPath + "/resetpassword":      HandlePasswordResetCode,
+			"/" + functionalPath + "/resendconfirmation": HandleResendConfirmation,
+			"/" + functionalPath + "/usernametaken":      HandleIsUsernameTaken,
+			"/" + functionalPath + "/addmfa":             HandleAddMFA,
 		},
 		"POST": {
-			"/" + functionalPath + "/submit/register":     "sub_register",
-			"/" + functionalPath + "/submit/login":        "sub_login",
-			"/" + functionalPath + "/submit/resetrequest": "sub_reset_request",
-			"/" + functionalPath + "/submit/reset":        "sub_reset",
-			"/" + functionalPath + "/submit/mfa":          "sub_mfa",
-			"/" + functionalPath + "/submit/validatemfa":  "sub_otp_validate",
+			"/" + functionalPath + "/submit/register":     HandleSubRegister,
+			"/" + functionalPath + "/submit/login":        HandleSubLogin,
+			"/" + functionalPath + "/submit/resetrequest": HandleSubResetRequest,
+			"/" + functionalPath + "/submit/reset":        HandleSubReset,
+			"/" + functionalPath + "/submit/mfa":          HandleSubOTP,
+			"/" + functionalPath + "/submit/validatemfa":  HandleSubMFAValidate,
 		},
 	}
+
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
 	if err != nil {
 		panic(err)
 	}
 
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// ASSEMBLE FORM PAGES
-	formTemplate, err = template.ParseFiles("assets/form.html")
+	formTemplate, err = template.ParseFiles("assets/form.html") // Preload form page template into memory
 	if err != nil {
 		panic(err)
 	}
 
-	emailTemplate, err = template.ParseFiles("assets/email.html")
+	emailTemplate, err = template.ParseFiles("assets/email.html") // Preload email template into memory
 	if err != nil {
 		panic(err)
 	}
 
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// MAIN REQUEST HANDLER
 	proxy := httputil.NewSingleHostReverseProxy(url)
 	staticFiles := http.StripPrefix("/"+functionalPath+"/static/", http.FileServer(http.Dir("./assets/static/")))
 	http.Handle("/"+functionalPath+"/static/", staticFiles)
 
 	http.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) { // Create main listener function
-		gateFunction := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load action associated with URI from functionalURIs map
-
-		if gateFunction != "" { // If functional URL
-			var err error
-			switch gateFunction { // Serve appropriate page
-			case "login":
-				err = formTemplate.Execute(response, loginPage)
-			case "logout":
-				http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
-				err = formTemplate.Execute(response, logoutPage)
-			case "register":
-				err = formTemplate.Execute(response, registrationPage)
-			case "forgot":
-				err = formTemplate.Execute(response, forgotPasswordPage)
-			case "confirmemail":
-				err = formTemplate.Execute(response, confirmEmailPage)
-			case "sub_register":
-				if IsValidNewEmail(request.FormValue("email")) {
-					RegisterSubmission(response, request)
-				} else {
-					err = formTemplate.Execute(response, emailTakenPage)
-				}
-			case "sub_login":
-				LoginSubmission(response, request)
-			case "confirm_email_code":
-				emailCode := request.URL.Query().Get("c")
-				if ConfirmEmailCode(emailCode) {
-					err = formTemplate.Execute(response, confirmedEmailPage)
-				} else {
-					err = formTemplate.Execute(response, linkExpired)
-				}
-			case "sub_reset_request":
-				email := request.FormValue("email")
-				if ResetPasswordRequest(email) {
-					err = formTemplate.Execute(response, resetSentPage)
-				} else {
-					err = formTemplate.Execute(response, resetNotSentPage)
-				}
-			case "reset_password":
-				resetCode := request.URL.Query().Get("c")
-				if resetCode != "" && IsValidResetCode(resetCode) {
-					customResetPage := resetPage
-					customResetPage.FormAction += fmt.Sprintf("?c=%s", resetCode)
-					err = formTemplate.Execute(response, customResetPage)
-				} else {
-					err = formTemplate.Execute(response, linkExpired)
-				}
-			case "sub_reset":
-				if ResetSubmission(request) {
-					err = formTemplate.Execute(response, resetSuccessPage)
-				} else {
-					response.WriteHeader(400)
-					fmt.Fprint(response, `400 - Invalid request.`)
-				}
-			case "resend_confirmation":
-				if !IsValidSession(request) && PendingEmailApproval(request) {
-					if ResendConfirmationEmail(request) {
-						err = formTemplate.Execute(response, resendConfirmationPage)
-					} else {
-						err = formTemplate.Execute(response, linkExpired)
-					}
-
-				} else {
-					http.Redirect(response, request, "/", http.StatusSeeOther)
-				}
-			case "username_taken":
-				if !IsValidNewUsername(request.URL.Query().Get("u")) {
-					response.WriteHeader(400)
-					fmt.Fprint(response, `Username taken.`)
-				} else {
-					response.WriteHeader(200)
-					fmt.Fprint(response, `Username available.`)
-				}
-			case "sub_mfa":
-				MfaSubmission(response, request)
-			case "add_mfa":
-				MfaEnrol(response, request)
-			case "sub_otp_validate":
-				MfaValidate(response, request)
-			}
-			if err != nil {
-				panic(err)
-			}
-
+		handler := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load handler associated with URI from functionalURIs map
+		tokenCookie, tokenError := request.Cookie(sessionCookieName)
+		var validSession bool = false
+		if tokenError == nil {
+			validSession = IsValidSession(tokenCookie.Value)
+		}
+		if handler != nil {
+			handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
+		} else if !validSession && requireAuthentication {
+			http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
+		} else if requireEmailConfirm && validSession && PendingEmailApproval(tokenCookie.Value) {
+			http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
 		} else {
-
-			// For URLs not used by Gatehouse
-			if requireAuthentication == "FALSE" {
-				proxy.ServeHTTP(response, request)
-			} else {
-				validSession := IsValidSession(request)
-				if validSession {
-					proxy.ServeHTTP(response, request)
-				} else if !validSession && requireEmailConfirm == "TRUE" && PendingEmailApproval(request) {
-					http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
-				} else {
-					http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
-				}
-			}
+			proxy.ServeHTTP(response, request)
 		}
 	})
 
@@ -204,20 +116,47 @@ func main() {
 		Addr:              ":" + listenPort,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-
 	err = server.ListenAndServe()
 	if err != nil {
 		panic(err)
 	}
 }
 
-func envWithDefault(variableName, defaultString string) string {
+func envWithDefault(variableName string, defaultString string) string {
 	val := os.Getenv(variableName)
 	if len(val) == 0 {
 		return defaultString
 	} else {
 		return val
 	}
+}
+
+func envWithDefaultBool(variableName string, defaultBool bool) bool {
+	var (
+		trueValues  []string = []string{"true", "yes"}
+		falseValues []string = []string{"false", "no"}
+	)
+	val := os.Getenv(variableName)
+	if len(val) == 0 {
+		return defaultBool
+	} else if listContains(trueValues, strings.ToLower(val)) {
+		return true
+	} else if listContains(falseValues, strings.ToLower(val)) {
+		return false
+	} else {
+		fmt.Printf("Invalid true/false value set for %s\n", variableName)
+		os.Exit(1)
+		return false
+	}
+}
+
+func listContains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+	return false
 }
 
 func InitDatabase() {

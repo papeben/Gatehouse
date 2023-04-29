@@ -1,4 +1,8 @@
 # Gatehouse
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/papeben/gatehouse/test-go.yml)
+![Language](https://img.shields.io/github/languages/top/papeben/gatehouse)
+[![Go Report](https://goreportcard.com/badge/github.com/papeben/gatehouse)](https://goreportcard.com/report/github.com/papeben/gatehouse)
+[![Go Coverage](https://github.com/papeben/gatehouse/wiki/coverage.svg)](https://raw.githack.com/wiki/papeben/gatehouse/coverage.html)
 
 ## Overview
 
