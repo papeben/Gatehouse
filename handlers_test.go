@@ -85,6 +85,14 @@ func TestRegistrationFlow(t *testing.T) {
 			fmt.Println(recorder.Body)
 			t.Errorf("Expected redirect, got %v", recorder.Code)
 		}
+
+		returnedCookies := recorder.Result().Cookies()
+		if len(returnedCookies) != 1 || returnedCookies[0].Name != sessionCookieName {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected a sesson cookie, but didn't get one")
+		} else {
+			sessionToken = returnedCookies[0].Value
+		}
 	})
 
 	t.Run("Get confirmation page", func(t *testing.T) {
@@ -92,6 +100,7 @@ func TestRegistrationFlow(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken})
 		recorder := httptest.NewRecorder()
 		handler := http.HandlerFunc(HandleMain)
 		handler.ServeHTTP(recorder, req)
@@ -99,6 +108,38 @@ func TestRegistrationFlow(t *testing.T) {
 		if recorder.Code != http.StatusOK {
 			fmt.Println(recorder.Body)
 			t.Errorf("Expected %v, got %v", http.StatusOK, recorder.Code)
+		}
+	})
+
+	t.Run("Get resend page", func(t *testing.T) {
+		req, err := http.NewRequest("GET", path.Join("/"+functionalPath+"/resendconfirmation"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken})
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusOK {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected %v, got %v", http.StatusOK, recorder.Code)
+		}
+	})
+
+	t.Run("Get resend page again", func(t *testing.T) {
+		req, err := http.NewRequest("GET", path.Join("/"+functionalPath+"/resendconfirmation"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken})
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusBadRequest {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected %v, got %v", http.StatusBadRequest, recorder.Code)
 		}
 	})
 

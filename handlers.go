@@ -111,6 +111,7 @@ func HandleResendConfirmation(response http.ResponseWriter, request *http.Reques
 	} else if IsValidSession(tokenCookie.Value) && !PendingEmailApproval(tokenCookie.Value) {
 		http.Redirect(response, request, "/", http.StatusSeeOther)
 	} else {
+		response.WriteHeader(400)
 		err := formTemplate.Execute(response, linkExpired)
 		if err != nil {
 			panic(err)
@@ -256,9 +257,9 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 					Link     string
 					AppName  string
 				}{
-					Title:    "MFA Token",
+					Title:    "OTP Token",
 					Username: username,
-					Message:  fmt.Sprintf("Your MFA code for %s is: %s", appName, mfaToken),
+					Message:  fmt.Sprintf("Your OTP code for %s is: %s", appName, mfaToken),
 					HasLink:  false,
 					Link:     "",
 					AppName:  appName,
@@ -267,7 +268,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 					panic(err)
 				}
 
-				err = sendMail(strings.ToLower(email), "Password Reset Request", body.String())
+				err = sendMail(strings.ToLower(email), "Sign In - OTP", body.String())
 				if err != nil {
 					fmt.Println(err)
 					fmt.Println("Error sending email to " + email + ". Placing MFA code below:")
