@@ -4,6 +4,8 @@
 [![Go Report](https://goreportcard.com/badge/github.com/papeben/gatehouse)](https://goreportcard.com/report/github.com/papeben/gatehouse)
 [![Go Coverage](https://github.com/papeben/gatehouse/wiki/coverage.svg)](https://raw.githack.com/wiki/papeben/gatehouse/coverage.html)
 
+A drop-in authentication and account management solution for websites.
+
 ## Overview
 
 Gatehouse is a lightweight HTTP reverse-proxy providing authentication for end users. Designed to be placed in front of your web applications, Gatehouse provides the core account functionality required for most websites.
