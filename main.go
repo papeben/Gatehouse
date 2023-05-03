@@ -152,9 +152,9 @@ func InitDatabase(n int) {
 	if err != nil {
 		panic(err)
 	}
+	defer db.Close()
 	_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", mysqlDatabase))
 	if err != nil {
-		db.Close()
 		if n > 1 {
 			fmt.Println("Failed to connect to database! Trying again in 5 seconds...")
 			time.Sleep(5 * time.Second)
@@ -186,6 +186,5 @@ func InitDatabase(n int) {
 		if err != nil {
 			panic(err)
 		}
-		db.Close()
 	}
 }
