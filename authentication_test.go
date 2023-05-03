@@ -12,7 +12,7 @@ import (
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
-	InitDatabase()
+	InitDatabase(1)
 }
 
 func TestIsValidSession(t *testing.T) {
