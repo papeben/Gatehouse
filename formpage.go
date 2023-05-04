@@ -413,6 +413,8 @@ var (
 			FormCreateHint("You must reauthenticate to perform this action."),
 			FormCreatePasswordInput("password", "Password"),
 			FormCreateSubmitInput("submit", "Submit"),
+			FormCreateDivider(),
+			FormCreateHint("Changed your mind?"),
 			FormCreateButtonLink("/"+functionalPath+"/manage", "Cancel"),
 			FormCreateDivider(),
 		},
