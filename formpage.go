@@ -403,10 +403,10 @@ var (
 		functionalPath,
 	}
 
-	criticalActionAuthPage GatehouseForm = GatehouseForm{ // Define forgot password page
+	elevateSessionPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - Reauthenticate",
 		"Confirm Password",
-		"/" + functionalPath + "/submit/criticalauth",
+		"/" + functionalPath + "/submit/elevate",
 		"POST",
 		[]GatehouseFormElement{
 			FormCreateDivider(),

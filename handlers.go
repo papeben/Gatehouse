@@ -206,6 +206,35 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	validSession := false
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	var validTargets []string = []string{"removemfa"}
+	target := request.URL.Query().Get("t")
+
+	if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if target == "" {
+		response.WriteHeader(400)
+		fmt.Fprintf(response, "Target required.")
+	} else if !listContains(validTargets, target) {
+		response.WriteHeader(400)
+		fmt.Fprintf(response, "Invalid target.")
+	} else {
+		var editedPage GatehouseForm = elevateSessionPage
+		editedPage.FormAction = path.Join("/", functionalPath, fmt.Sprintf("/submit/elevate?t=%s", target))
+		err := formTemplate.Execute(response, editedPage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // Form Submissions
 

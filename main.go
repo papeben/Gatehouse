@@ -135,6 +135,7 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/resendconfirmation": HandleResendConfirmation,
 			"/" + functionalPath + "/usernametaken":      HandleIsUsernameTaken,
 			"/" + functionalPath + "/addmfa":             HandleAddMFA,
+			"/" + functionalPath + "/elevate":            HandleElevateSession,
 		},
 		"POST": {
 			"/" + functionalPath + "/submit/register":     HandleSubRegister,
