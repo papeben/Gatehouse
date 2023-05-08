@@ -39,7 +39,25 @@ func IsValidSession(sessionToken string) bool {
 	defer db.Close()
 
 	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionToken).Scan(&userID)
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID)
+	if err != nil && err == sql.ErrNoRows {
+		return false
+	} else if err != nil {
+		panic(err)
+	} else {
+		return true
+	}
+}
+
+func IsValidCriticalSession(sessionToken string) bool {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	var userID string
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 1", tablePrefix, tablePrefix), sessionToken).Scan(&userID)
 	if err != nil && err == sql.ErrNoRows {
 		return false
 	} else if err != nil {

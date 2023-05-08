@@ -31,7 +31,7 @@ var (
 	tablePrefix           string = envWithDefault("TABLE_PREFIX", "gatehouse")
 	sessionCookieName     string = envWithDefault("SESSION_COOKIE", "gatehouse-session")
 	mfaCookieName         string = envWithDefault("MFA_COOKIE", "gatehouse-mfa")
-	elevatedCookieName    string = envWithDefault("CRITICAL_COOKIE", "gatehouse-crit")
+	criticalCookieName    string = envWithDefault("CRITICAL_COOKIE", "gatehouse-crit")
 	requireAuthentication bool   = envWithDefaultBool("REQUIRE_AUTH", true)
 	requireEmailConfirm   bool   = envWithDefaultBool("REQUIRE_EMAIL_CONFIRM", true)
 	mfaEnabled            bool   = envWithDefaultBool("MFA_ENABLED", true)
@@ -173,7 +173,7 @@ func InitDatabase(n int) {
 		if err != nil {
 			panic(err)
 		}
-		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_sessions` (`session_token` VARCHAR(64) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `elevated` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`session_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_sessions` (`session_token` VARCHAR(64) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `critical` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`session_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 		if err != nil {
 			panic(err)
 		}
