@@ -57,7 +57,7 @@ func IsValidCriticalSession(sessionToken string) bool {
 	defer db.Close()
 
 	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 1", tablePrefix, tablePrefix), sessionToken).Scan(&userID)
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 1 AND created > NOW() - INTERVAL 1 HOUR", tablePrefix, tablePrefix), sessionToken).Scan(&userID)
 	if err != nil && err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
