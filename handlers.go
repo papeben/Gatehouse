@@ -235,6 +235,35 @@ func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func HandleRemoveMFA(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession         bool = false
+		validCriticalSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+	}
+
+	if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if !validCriticalSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=removemfa"), http.StatusSeeOther)
+	} else {
+		err := formTemplate.Execute(response, mfaRemovePage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // Form Submissions
 
@@ -547,11 +576,11 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 			http.Redirect(response, request, "/"+functionalPath+fmt.Sprintf("/elevate?error=invalid&t=%s", target), http.StatusSeeOther)
 		} else {
 			elevatedSessionToken := GenerateSessionToken()
-			_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id, elevated) VALUES (?, ?, 1)", tablePrefix), elevatedSessionToken, userID)
+			_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id, critical) VALUES (?, ?, 1)", tablePrefix), elevatedSessionToken, userID)
 			if err != nil {
 				panic(err)
 			}
-			cookie := http.Cookie{Name: elevatedCookieName, Value: elevatedSessionToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
+			cookie := http.Cookie{Name: criticalCookieName, Value: elevatedSessionToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
 			http.SetCookie(response, &cookie)
 			http.Redirect(response, request, path.Join("/", functionalPath, target), http.StatusSeeOther)
 		}
