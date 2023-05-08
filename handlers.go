@@ -591,6 +591,7 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 	var (
 		validSession         bool = false
 		validCriticalSession bool = false
+		mfaType              string
 		sessionUserID        string
 		criticalUserID       string
 	)
@@ -617,7 +618,7 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 		}
 		defer db.Close()
 
-		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&sessionUserID)
+		err = db.QueryRow(fmt.Sprintf("SELECT id, mfa_type FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&sessionUserID, &mfaType)
 		if err != nil {
 			panic(err)
 		}
@@ -629,6 +630,9 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 		if sessionUserID != criticalUserID {
 			response.WriteHeader(500)
 			fmt.Fprint(response, `Undefined error.`)
+		} else if mfaType != "token" {
+			response.WriteHeader(400)
+			fmt.Fprint(response, `MFA Device not registered`)
 		} else {
 			_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_type = 'email', mfa_secret = NULL WHERE id = ?", tablePrefix), sessionUserID)
 			if err != nil {
