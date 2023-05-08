@@ -436,6 +436,7 @@ var (
 		[]OIDCButton{},
 		functionalPath,
 	}
+
 	mfaFailedPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - MFA Failed",
 		"OTP Incorrect",
@@ -445,6 +446,24 @@ var (
 			FormCreateDivider(),
 			FormCreateHint("Your OTP code was not valid, please try adding you MFA device again."),
 			FormCreateButtonLink("/"+functionalPath+"/addmfa", "Try Again"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	mfaRemovePage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Remove MFA",
+		"Remove MFA",
+		"/" + functionalPath + "/submit/removemfa",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("This will remove your registered MFA device. Two-factor OTP codes will instead be sent by email."),
+			FormCreateHint("Are you sure you wish to proceed?"),
+			FormCreateSubmitInput("submit", "Yes"),
+			FormCreateDivider(),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "No, take me back!"),
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
