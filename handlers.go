@@ -586,3 +586,58 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 		}
 	}
 }
+
+func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession         bool = false
+		validCriticalSession bool = false
+		sessionUserID        string
+		criticalUserID       string
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+	}
+
+	if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if !validCriticalSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=removemfa"), http.StatusSeeOther)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&sessionUserID)
+		if err != nil {
+			panic(err)
+		}
+		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND critical = 1", tablePrefix, tablePrefix), critialSessionCookie.Value).Scan(&criticalUserID)
+		if err != nil {
+			panic(err)
+		}
+
+		if sessionUserID != criticalUserID {
+			response.WriteHeader(500)
+			fmt.Fprint(response, `Undefined error.`)
+		} else {
+			_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_type = 'email', mfa_secret = NULL WHERE id = ?", tablePrefix), sessionUserID)
+			if err != nil {
+				panic(err)
+			}
+			err = formTemplate.Execute(response, mfaRemovedPage)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+}
