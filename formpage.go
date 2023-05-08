@@ -469,4 +469,17 @@ var (
 		[]OIDCButton{},
 		functionalPath,
 	}
+	mfaRemovedPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - MFA Removed",
+		"MFA Removed",
+		"/" + functionalPath + "/manage",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("MFA device removed. Two-factor OTP codes will now be sent by email."),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "OK"),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
 )
