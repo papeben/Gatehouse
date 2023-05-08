@@ -145,6 +145,7 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/submit/reset":        HandleSubReset,
 			"/" + functionalPath + "/submit/mfa":          HandleSubOTP,
 			"/" + functionalPath + "/submit/validatemfa":  HandleSubMFAValidate,
+			"/" + functionalPath + "/submit/elevate":      HandleSubElevate,
 		},
 	}
 }

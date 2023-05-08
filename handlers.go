@@ -506,3 +506,54 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 		}
 	}
 }
+
+func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
+	var (
+		password     string = request.FormValue("password")
+		passwordHash string
+		userID       string
+		validSession bool = false
+	)
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	var validTargets []string = []string{"removemfa"}
+	target := request.URL.Query().Get("t")
+
+	if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if target == "" {
+		response.WriteHeader(400)
+		fmt.Fprintf(response, "Target required.")
+	} else if !listContains(validTargets, target) {
+		response.WriteHeader(400)
+		fmt.Fprintf(response, "Invalid target.")
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT id, password FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &passwordHash)
+		if err != nil {
+			panic(err)
+		}
+
+		if !CheckPasswordHash(password, passwordHash) {
+			http.Redirect(response, request, "/"+functionalPath+fmt.Sprintf("/elevate?error=invalid&t=%s", target), http.StatusSeeOther)
+		} else {
+			elevatedSessionToken := GenerateSessionToken()
+			_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id, elevated) VALUES (?, ?, 1)", tablePrefix), elevatedSessionToken, userID)
+			if err != nil {
+				panic(err)
+			}
+			cookie := http.Cookie{Name: elevatedCookieName, Value: elevatedSessionToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
+			http.SetCookie(response, &cookie)
+			http.Redirect(response, request, path.Join("/", functionalPath, target), http.StatusSeeOther)
+		}
+	}
+}
