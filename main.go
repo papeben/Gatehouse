@@ -30,7 +30,8 @@ var (
 	mysqlDatabase         string = envWithDefault("MYSQL_DATABASE", "gatehouse")
 	tablePrefix           string = envWithDefault("TABLE_PREFIX", "gatehouse")
 	sessionCookieName     string = envWithDefault("SESSION_COOKIE", "gatehouse-session")
-	mfaCookieName         string = envWithDefault("SESSION_COOKIE", "gatehouse-mfa")
+	mfaCookieName         string = envWithDefault("MFA_COOKIE", "gatehouse-mfa")
+	criticalCookieName    string = envWithDefault("CRITICAL_COOKIE", "gatehouse-crit")
 	requireAuthentication bool   = envWithDefaultBool("REQUIRE_AUTH", true)
 	requireEmailConfirm   bool   = envWithDefaultBool("REQUIRE_EMAIL_CONFIRM", true)
 	mfaEnabled            bool   = envWithDefaultBool("MFA_ENABLED", true)
@@ -135,6 +136,8 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/resendconfirmation": HandleResendConfirmation,
 			"/" + functionalPath + "/usernametaken":      HandleIsUsernameTaken,
 			"/" + functionalPath + "/addmfa":             HandleAddMFA,
+			"/" + functionalPath + "/removemfa":          HandleRemoveMFA,
+			"/" + functionalPath + "/elevate":            HandleElevateSession,
 		},
 		"POST": {
 			"/" + functionalPath + "/submit/register":     HandleSubRegister,
@@ -143,6 +146,8 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/submit/reset":        HandleSubReset,
 			"/" + functionalPath + "/submit/mfa":          HandleSubOTP,
 			"/" + functionalPath + "/submit/validatemfa":  HandleSubMFAValidate,
+			"/" + functionalPath + "/submit/elevate":      HandleSubElevate,
+			"/" + functionalPath + "/submit/removemfa":    HandleSubRemoveMFA,
 		},
 	}
 }
@@ -170,7 +175,7 @@ func InitDatabase(n int) {
 		if err != nil {
 			panic(err)
 		}
-		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_sessions` (`session_token` VARCHAR(64) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`session_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_sessions` (`session_token` VARCHAR(64) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `critical` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`session_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 		if err != nil {
 			panic(err)
 		}
