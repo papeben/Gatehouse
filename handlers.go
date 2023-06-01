@@ -264,6 +264,41 @@ func HandleRemoveMFA(response http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func HandleManage(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	if !validSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
+	} else {
+		var dashboardPage GatehouseForm = GatehouseForm{ // Define login page
+			appName + " - Manage Account",
+			"Manage Account",
+			"/",
+			"GET",
+			[]GatehouseFormElement{
+				FormCreateDivider(),
+				FormCreateButtonLink(path.Join("/", functionalPath, "addmfa"), "Configure MFA"),
+				FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Change Email"),
+				FormCreateDivider(),
+				FormCreateButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
+			},
+			[]OIDCButton{},
+			functionalPath,
+		}
+		err := dashTemplate.Execute(response, dashboardPage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // Form Submissions
 

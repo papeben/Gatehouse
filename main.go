@@ -45,6 +45,7 @@ var (
 	webDomain             string = envWithDefault("WEB_DOMAIN", "http://localhost:8080")
 	formTemplate          *template.Template
 	emailTemplate         *template.Template
+	dashTemplate          *template.Template
 	functionalURIs        map[string]map[string]interface{}
 	proxy                 *httputil.ReverseProxy
 )
@@ -121,6 +122,11 @@ func LoadTemplates() {
 	if err != nil {
 		panic(err)
 	}
+
+	dashTemplate, err = template.ParseFiles("assets/dashboard.html") // Preload email template into memory
+	if err != nil {
+		panic(err)
+	}
 }
 
 func LoadFuncionalURIs() {
@@ -138,6 +144,7 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/addmfa":             HandleAddMFA,
 			"/" + functionalPath + "/removemfa":          HandleRemoveMFA,
 			"/" + functionalPath + "/elevate":            HandleElevateSession,
+			"/" + functionalPath + "/manage":             HandleManage,
 		},
 		"POST": {
 			"/" + functionalPath + "/submit/register":     HandleSubRegister,
