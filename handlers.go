@@ -277,22 +277,52 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 	if !validSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
 	} else {
-		var dashboardPage GatehouseForm = GatehouseForm{ // Define login page
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		var (
+			userID         string = ""
+			email          string = ""
+			emailConfirmed bool   = false
+			mfaType        string = ""
+			dashButtons    []GatehouseFormElement
+		)
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, email_confirmed, mfa_type FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &email, &emailConfirmed, &mfaType)
+		if err != nil {
+			panic(err)
+		}
+
+		if email == "" {
+			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "addemail"), "Add Email Address"))
+		} else {
+			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Change Email Address"))
+		}
+
+		if mfaType == "email" {
+			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "addmfa"), "Add MFA Device"))
+		} else if mfaType == "token" {
+			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "removemfa"), "Remove MFA Device"))
+		}
+
+		dashButtons = append(
+			dashButtons,
+			FormCreateDivider(),
+			FormCreateButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
+		)
+
+		var dashboardPage GatehouseForm = GatehouseForm{
 			appName + " - Manage Account",
 			"Manage Account",
 			"/",
 			"GET",
-			[]GatehouseFormElement{
-				FormCreateDivider(),
-				FormCreateButtonLink(path.Join("/", functionalPath, "addmfa"), "Configure MFA"),
-				FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Change Email"),
-				FormCreateDivider(),
-				FormCreateButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
-			},
+			dashButtons,
 			[]OIDCButton{},
 			functionalPath,
 		}
-		err := dashTemplate.Execute(response, dashboardPage)
+		err = dashTemplate.Execute(response, dashboardPage)
 		if err != nil {
 			panic(err)
 		}
