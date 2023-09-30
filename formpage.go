@@ -353,6 +353,22 @@ var (
 		functionalPath,
 	}
 
+	emailChangePage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Change Your Email",
+		"Change Your Email",
+		"/" + functionalPath + "/submit/changeemail",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Enter your new email address:"),
+			FormCreateTextInput("newemail", "name@example.com"),
+			FormCreateSubmitInput("submit", "Confirm Email"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
 	mfaEmailPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - MFA",
 		"MFA Code Sent",
@@ -469,6 +485,7 @@ var (
 		[]OIDCButton{},
 		functionalPath,
 	}
+
 	mfaRemovedPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - MFA Removed",
 		"MFA Removed",

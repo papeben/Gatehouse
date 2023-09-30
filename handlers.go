@@ -213,7 +213,7 @@ func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
 
-	var validTargets []string = []string{"removemfa"}
+	var validTargets []string = []string{"removemfa", "changeemail"}
 	target := request.URL.Query().Get("t")
 
 	if !validSession {
@@ -323,6 +323,35 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 			functionalPath,
 		}
 		err = dashTemplate.Execute(response, dashboardPage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession         bool = false
+		validCriticalSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+	}
+
+	if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if !validCriticalSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeemail"), http.StatusSeeOther)
+	} else {
+		err := formTemplate.Execute(response, emailChangePage)
 		if err != nil {
 			panic(err)
 		}
@@ -613,7 +642,7 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
 
-	var validTargets []string = []string{"removemfa"}
+	var validTargets []string = []string{"removemfa", "changeemail"}
 	target := request.URL.Query().Get("t")
 
 	if !validSession {

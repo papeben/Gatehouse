@@ -145,6 +145,7 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/removemfa":          HandleRemoveMFA,
 			"/" + functionalPath + "/elevate":            HandleElevateSession,
 			"/" + functionalPath + "/manage":             HandleManage,
+			"/" + functionalPath + "/changeemail":        HandleChangeEmail,
 		},
 		"POST": {
 			"/" + functionalPath + "/submit/register":     HandleSubRegister,
