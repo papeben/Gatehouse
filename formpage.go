@@ -362,7 +362,7 @@ var (
 			FormCreateDivider(),
 			FormCreateHint("Enter your new email address:"),
 			FormCreateTextInput("newemail", "name@example.com"),
-			FormCreateSubmitInput("submit", "Confirm Email"),
+			FormCreateSubmitInput("submit", "Change Email"),
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},

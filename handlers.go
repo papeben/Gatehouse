@@ -739,3 +739,58 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 		}
 	}
 }
+
+func HandleSubEmailChange(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession         bool = false
+		validCriticalSession bool = false
+		userID               string
+		username             string
+		email                string
+	)
+
+	email = strings.ToLower(request.FormValue("newemail"))
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+	}
+
+	if !validSession || !validCriticalSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if !IsValidNewEmail(email) {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Invalid email.`)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, username FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &username)
+		if err != nil && err != sql.ErrNoRows {
+			panic(err)
+		} else if err == sql.ErrNoRows {
+			response.WriteHeader(400)
+			fmt.Fprint(response, `Invalid request.`)
+		} else {
+			_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email = ?, email_confirmed = 0, email_resent = 0 WHERE id = ?", tablePrefix), email, userID)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		SendEmailConfirmationCode(userID, email, username)
+		err = formTemplate.Execute(response, confirmEmailPage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
