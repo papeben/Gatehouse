@@ -296,7 +296,7 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 		}
 
 		if email == "" {
-			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "addemail"), "Add Email Address"))
+			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Add Email Address"))
 		} else {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Change Email Address"))
 		}
