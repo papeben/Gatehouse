@@ -499,4 +499,18 @@ var (
 		[]OIDCButton{},
 		functionalPath,
 	}
+
+	deleteAccountPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Delete Account",
+		"Delete Account",
+		"/" + functionalPath + "/submit/deleteaccount",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Are you sure you wish to delete your account?"),
+			FormCreateSubmitInput("submit", "Delete Account"),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
 )

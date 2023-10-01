@@ -213,7 +213,6 @@ func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
 
-	var validTargets []string = []string{"removemfa", "changeemail"}
 	target := request.URL.Query().Get("t")
 
 	if !validSession {
@@ -222,7 +221,7 @@ func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
 	} else if target == "" {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Target required.")
-	} else if !listContains(validTargets, target) {
+	} else if !listContains(elevatedRedirectPages, target) {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Invalid target.")
 	} else {
@@ -352,6 +351,35 @@ func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeemail"), http.StatusSeeOther)
 	} else {
 		err := formTemplate.Execute(response, emailChangePage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession         bool = false
+		validCriticalSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+	}
+
+	if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if !validCriticalSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=deleteaccount"), http.StatusSeeOther)
+	} else {
+		err := formTemplate.Execute(response, deleteAccountPage)
 		if err != nil {
 			panic(err)
 		}
@@ -642,7 +670,6 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
 
-	var validTargets []string = []string{"removemfa", "changeemail"}
 	target := request.URL.Query().Get("t")
 
 	if !validSession {
@@ -651,7 +678,7 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 	} else if target == "" {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Target required.")
-	} else if !listContains(validTargets, target) {
+	} else if !listContains(elevatedRedirectPages, target) {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Invalid target.")
 	} else {

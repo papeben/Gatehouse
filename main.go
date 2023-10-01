@@ -48,6 +48,7 @@ var (
 	dashTemplate          *template.Template
 	functionalURIs        map[string]map[string]interface{}
 	proxy                 *httputil.ReverseProxy
+	elevatedRedirectPages = []string{"removemfa", "changeemail", "deleteaccount"}
 )
 
 func main() {
@@ -146,6 +147,7 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/elevate":            HandleElevateSession,
 			"/" + functionalPath + "/manage":             HandleManage,
 			"/" + functionalPath + "/changeemail":        HandleChangeEmail,
+			"/" + functionalPath + "/deleteaccount":      HandleDeleteAccount,
 		},
 		"POST": {
 			"/" + functionalPath + "/submit/register":     HandleSubRegister,
