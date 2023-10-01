@@ -36,6 +36,9 @@ body {
     cursor: pointer;
     background-color: #f1f1f1;
 }
+.gh_inp_checkbox {
+    display: inline;
+}
 .gh_a_small {
     font-size: 14px;
     color: black;

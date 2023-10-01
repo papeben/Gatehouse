@@ -30,6 +30,19 @@ type OIDCButton struct {
 	URI             string
 }
 
+func FormCreateCheckboxInput(name string) GatehouseFormElement {
+	return GatehouseFormElement{
+		"gh_inp_checkbox",
+		"",
+		false,
+		"",
+		true,
+		false,
+		"checkbox",
+		name,
+		"",
+	}
+}
 func FormCreateTextInput(name string, placeholder string) GatehouseFormElement {
 	return GatehouseFormElement{
 		"gh_inp_text",
@@ -121,7 +134,6 @@ func FormCreateHint(text string) GatehouseFormElement {
 		"",
 	}
 }
-
 func FormCreateQR(b64Data string) GatehouseFormElement {
 	return GatehouseFormElement{
 		"gh_img_qr",
@@ -508,7 +520,28 @@ var (
 		[]GatehouseFormElement{
 			FormCreateDivider(),
 			FormCreateHint("Are you sure you wish to delete your account?"),
+			FormCreateDivider(),
+			FormCreateCheckboxInput("confirmed"),
+			FormCreateHint("I understand this action cannot be reversed."),
 			FormCreateSubmitInput("submit", "Delete Account"),
+			FormCreateDivider(),
+			FormCreateHint("Changed your mind?"),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Cancel"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	deletedAccountPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Account Deleted",
+		"Account Deleted",
+		"/",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateHint("Your account has been deleted."),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Back to Site"),
+			FormCreateDivider(),
 		},
 		[]OIDCButton{},
 		functionalPath,
