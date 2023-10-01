@@ -52,6 +52,34 @@ func HandleForgotPassword(response http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func HandleRecoveryCode(response http.ResponseWriter, request *http.Request) {
+	var (
+		userID string
+	)
+	mfaCookie, err := request.Cookie(mfaCookieName)
+	if err != nil {
+		http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ? AND used = 0 AND type = 'totp'", tablePrefix), mfaCookie.Value).Scan(&userID)
+		if err == sql.ErrNoRows {
+			http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+		} else if err != nil {
+			panic(err)
+		} else {
+			err := formTemplate.Execute(response, mfaRecoveryCodePage)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
 func HandleConfirmEmail(response http.ResponseWriter, request *http.Request) {
 	err := formTemplate.Execute(response, confirmEmailPage)
 	if err != nil {
@@ -308,7 +336,9 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 
 		dashButtons = append(
 			dashButtons,
+			FormCreateButtonLink(path.Join("/", functionalPath, "logout"), "Sign Out"),
 			FormCreateDivider(),
+			FormCreateHint("Danger Area"),
 			FormCreateButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
 		)
 
@@ -460,7 +490,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 					panic(err)
 				}
 			} else {
-				_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, "")
+				_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "totp", userID, "")
 				if err != nil {
 					panic(err)
 				}
@@ -643,6 +673,36 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 				if err != nil {
 					panic(err)
 				}
+
+				var recoveryCodes string = ""
+				for i := 0; i < 12; i++ {
+					recoveryCode := GenerateRandomNumbers(8)
+					recoveryCodes = recoveryCodes + "<br>" + recoveryCode
+					_, err = db.Exec(fmt.Sprintf("INSERT IGNORE INTO %s_recovery (user_id, code) VALUES (?, ?)", tablePrefix), userID, recoveryCode)
+					if err != nil {
+						panic(err)
+					}
+				}
+
+				var mfaValidatedPage GatehouseForm = GatehouseForm{ // Define forgot password page
+					appName + " - MFA Validated",
+					"Success",
+					"/",
+					"GET",
+					[]GatehouseFormElement{
+						FormCreateDivider(),
+						FormCreateHint("Your OTP code was validated successfully! You are now able to sign in with your authenticator OTP in the future."),
+						FormCreateDivider(),
+						FormCreateHint("Your recovery codes:"),
+						FormCreateHint(recoveryCodes),
+						FormCreateDivider(),
+						FormCreateButtonLink("/"+functionalPath+"/manage", "Back to Dashboard"),
+						FormCreateDivider(),
+					},
+					[]OIDCButton{},
+					functionalPath,
+				}
+
 				err = formTemplate.Execute(response, mfaValidatedPage)
 				if err != nil {
 					panic(err)
@@ -866,6 +926,36 @@ func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request)
 		err = formTemplate.Execute(response, deletedAccountPage)
 		if err != nil {
 			panic(err)
+		}
+	}
+}
+
+func HandleSubRecoveryCode(response http.ResponseWriter, request *http.Request) {
+	var (
+		userID        string
+		recoveryToken string = request.FormValue("token")
+	)
+	mfaCookie, err := request.Cookie(mfaCookieName)
+	if err != nil {
+		http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_mfa INNER JOIN %s_recovery ON %s_mfa.user_id = %s_recovery.user_id INNER JOIN %s_accounts ON id = %s_recovery.user_id WHERE mfa_session = ? AND %s_mfa.used = 0 AND type = 'totp' AND %s_mfa.created > CURRENT_TIMESTAMP - INTERVAL 1 HOUR AND code = ?", tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix), mfaCookie.Value, recoveryToken).Scan(&userID)
+		if err == sql.ErrNoRows {
+			http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
+		} else if err != nil {
+			panic(err)
+		} else {
+			_, err = db.Exec(fmt.Sprintf("UPDATE %s_recovery SET used = 1 WHERE user_id = ? AND code = ?", tablePrefix), userID, recoveryToken)
+			if err != nil {
+				panic(err)
+			}
+			AuthenticateRequestor(response, request, userID)
 		}
 	}
 }
