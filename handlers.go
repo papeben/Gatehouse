@@ -929,3 +929,33 @@ func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request)
 		}
 	}
 }
+
+func HandleSubRecoveryCode(response http.ResponseWriter, request *http.Request) {
+	var (
+		userID        string
+		recoveryToken string = request.FormValue("token")
+	)
+	mfaCookie, err := request.Cookie(mfaCookieName)
+	if err != nil {
+		http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_mfa INNER JOIN %s_recovery ON %s_mfa.user_id = %s_recovery.user_id INNER JOIN %s_accounts ON id = %s_recovery.user_id WHERE mfa_session = ? AND %s_mfa.used = 0 AND type = 'totp' AND %s_mfa.created > CURRENT_TIMESTAMP - INTERVAL 1 HOUR AND code = ?", tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix), mfaCookie.Value, recoveryToken).Scan(&userID)
+		if err == sql.ErrNoRows {
+			http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
+		} else if err != nil {
+			panic(err)
+		} else {
+			_, err = db.Exec(fmt.Sprintf("UPDATE %s_recovery SET used = 1 WHERE user_id = ? AND code = ?", tablePrefix), userID, recoveryToken)
+			if err != nil {
+				panic(err)
+			}
+			AuthenticateRequestor(response, request, userID)
+		}
+	}
+}
