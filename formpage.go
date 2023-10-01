@@ -410,6 +410,25 @@ var (
 			FormCreateTextInput("token", "000000"),
 			FormCreateSubmitInput("submit", "Submit"),
 			FormCreateDivider(),
+			FormCreateHint("Can't access TOTP?"),
+			FormCreateSmallLink("/gatehouse/recoverycode", "Use recovery code"),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	mfaRecoveryCodePage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - MFA",
+		"Enter Recovery Code",
+		"/" + functionalPath + "/submit/recoverycode",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Enter one of your saved recovery codes to sign in. The codes are single use and are deactivated once entered."),
+			FormCreateHint("Enter the code below:"),
+			FormCreateTextInput("token", "00000000"),
+			FormCreateSubmitInput("submit", "Submit"),
+			FormCreateDivider(),
 		},
 		[]OIDCButton{},
 		functionalPath,

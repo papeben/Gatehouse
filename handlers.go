@@ -52,6 +52,34 @@ func HandleForgotPassword(response http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func HandleRecoveryCode(response http.ResponseWriter, request *http.Request) {
+	var (
+		userID string
+	)
+	mfaCookie, err := request.Cookie(mfaCookieName)
+	if err != nil {
+		http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ? AND used = 0 AND type = 'totp'", tablePrefix), mfaCookie.Value).Scan(&userID)
+		if err == sql.ErrNoRows {
+			http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+		} else if err != nil {
+			panic(err)
+		} else {
+			err := formTemplate.Execute(response, mfaRecoveryCodePage)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
 func HandleConfirmEmail(response http.ResponseWriter, request *http.Request) {
 	err := formTemplate.Execute(response, confirmEmailPage)
 	if err != nil {
@@ -462,7 +490,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 					panic(err)
 				}
 			} else {
-				_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, "")
+				_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "totp", userID, "")
 				if err != nil {
 					panic(err)
 				}

@@ -148,6 +148,7 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/manage":             HandleManage,
 			"/" + functionalPath + "/changeemail":        HandleChangeEmail,
 			"/" + functionalPath + "/deleteaccount":      HandleDeleteAccount,
+			"/" + functionalPath + "/recoverycode":       HandleRecoveryCode,
 		},
 		"POST": {
 			"/" + functionalPath + "/submit/register":      HandleSubRegister,
