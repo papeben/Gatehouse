@@ -336,6 +336,7 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 
 		dashButtons = append(
 			dashButtons,
+			FormCreateButtonLink(path.Join("/", functionalPath, "changeavatar"), "Change Avatar"),
 			FormCreateButtonLink(path.Join("/", functionalPath, "logout"), "Sign Out"),
 			FormCreateDivider(),
 			FormCreateHint("Danger Area"),
