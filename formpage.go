@@ -30,6 +30,19 @@ type OIDCButton struct {
 	URI             string
 }
 
+func FormCreateCheckboxInput(name string) GatehouseFormElement {
+	return GatehouseFormElement{
+		"gh_inp_checkbox",
+		"",
+		false,
+		"",
+		true,
+		false,
+		"checkbox",
+		name,
+		"",
+	}
+}
 func FormCreateTextInput(name string, placeholder string) GatehouseFormElement {
 	return GatehouseFormElement{
 		"gh_inp_text",
@@ -121,7 +134,6 @@ func FormCreateHint(text string) GatehouseFormElement {
 		"",
 	}
 }
-
 func FormCreateQR(b64Data string) GatehouseFormElement {
 	return GatehouseFormElement{
 		"gh_img_qr",
@@ -353,6 +365,22 @@ var (
 		functionalPath,
 	}
 
+	emailChangePage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Change Your Email",
+		"Change Your Email",
+		"/" + functionalPath + "/submit/changeemail",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Enter your new email address:"),
+			FormCreateTextInput("newemail", "name@example.com"),
+			FormCreateSubmitInput("submit", "Change Email"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
 	mfaEmailPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - MFA",
 		"MFA Code Sent",
@@ -469,6 +497,7 @@ var (
 		[]OIDCButton{},
 		functionalPath,
 	}
+
 	mfaRemovedPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - MFA Removed",
 		"MFA Removed",
@@ -478,6 +507,41 @@ var (
 			FormCreateDivider(),
 			FormCreateHint("MFA device removed. Two-factor OTP codes will now be sent by email."),
 			FormCreateButtonLink("/"+functionalPath+"/manage", "OK"),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	deleteAccountPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Delete Account",
+		"Delete Account",
+		"/" + functionalPath + "/submit/deleteaccount",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Are you sure you wish to delete your account?"),
+			FormCreateDivider(),
+			FormCreateCheckboxInput("confirmed"),
+			FormCreateHint("I understand this action cannot be reversed."),
+			FormCreateSubmitInput("submit", "Delete Account"),
+			FormCreateDivider(),
+			FormCreateHint("Changed your mind?"),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Cancel"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	deletedAccountPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Account Deleted",
+		"Account Deleted",
+		"/",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateHint("Your account has been deleted."),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Back to Site"),
+			FormCreateDivider(),
 		},
 		[]OIDCButton{},
 		functionalPath,

@@ -45,8 +45,10 @@ var (
 	webDomain             string = envWithDefault("WEB_DOMAIN", "http://localhost:8080")
 	formTemplate          *template.Template
 	emailTemplate         *template.Template
+	dashTemplate          *template.Template
 	functionalURIs        map[string]map[string]interface{}
 	proxy                 *httputil.ReverseProxy
+	elevatedRedirectPages = []string{"removemfa", "changeemail", "deleteaccount"}
 )
 
 func main() {
@@ -121,6 +123,11 @@ func LoadTemplates() {
 	if err != nil {
 		panic(err)
 	}
+
+	dashTemplate, err = template.ParseFiles("assets/dashboard.html") // Preload email template into memory
+	if err != nil {
+		panic(err)
+	}
 }
 
 func LoadFuncionalURIs() {
@@ -138,16 +145,21 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/addmfa":             HandleAddMFA,
 			"/" + functionalPath + "/removemfa":          HandleRemoveMFA,
 			"/" + functionalPath + "/elevate":            HandleElevateSession,
+			"/" + functionalPath + "/manage":             HandleManage,
+			"/" + functionalPath + "/changeemail":        HandleChangeEmail,
+			"/" + functionalPath + "/deleteaccount":      HandleDeleteAccount,
 		},
 		"POST": {
-			"/" + functionalPath + "/submit/register":     HandleSubRegister,
-			"/" + functionalPath + "/submit/login":        HandleSubLogin,
-			"/" + functionalPath + "/submit/resetrequest": HandleSubResetRequest,
-			"/" + functionalPath + "/submit/reset":        HandleSubReset,
-			"/" + functionalPath + "/submit/mfa":          HandleSubOTP,
-			"/" + functionalPath + "/submit/validatemfa":  HandleSubMFAValidate,
-			"/" + functionalPath + "/submit/elevate":      HandleSubElevate,
-			"/" + functionalPath + "/submit/removemfa":    HandleSubRemoveMFA,
+			"/" + functionalPath + "/submit/register":      HandleSubRegister,
+			"/" + functionalPath + "/submit/login":         HandleSubLogin,
+			"/" + functionalPath + "/submit/resetrequest":  HandleSubResetRequest,
+			"/" + functionalPath + "/submit/reset":         HandleSubReset,
+			"/" + functionalPath + "/submit/mfa":           HandleSubOTP,
+			"/" + functionalPath + "/submit/validatemfa":   HandleSubMFAValidate,
+			"/" + functionalPath + "/submit/elevate":       HandleSubElevate,
+			"/" + functionalPath + "/submit/removemfa":     HandleSubRemoveMFA,
+			"/" + functionalPath + "/submit/changeemail":   HandleSubEmailChange,
+			"/" + functionalPath + "/submit/deleteaccount": HandleSubDeleteAccount,
 		},
 	}
 }
@@ -171,7 +183,7 @@ func InitDatabase(n int) {
 	} else {
 		db.SetConnMaxLifetime(time.Minute * 3)
 
-		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NULL,`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0, `mfa_type` VARCHAR(8) NOT NULL DEFAULT 'email', `mfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NOT NULL DEFAULT '',`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar_url` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0, `mfa_type` VARCHAR(8) NOT NULL DEFAULT 'email', `mfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 		if err != nil {
 			panic(err)
 		}

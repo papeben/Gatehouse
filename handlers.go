@@ -213,7 +213,6 @@ func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
 
-	var validTargets []string = []string{"removemfa"}
 	target := request.URL.Query().Get("t")
 
 	if !validSession {
@@ -222,7 +221,7 @@ func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
 	} else if target == "" {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Target required.")
-	} else if !listContains(validTargets, target) {
+	} else if !listContains(elevatedRedirectPages, target) {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Invalid target.")
 	} else {
@@ -258,6 +257,129 @@ func HandleRemoveMFA(response http.ResponseWriter, request *http.Request) {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=removemfa"), http.StatusSeeOther)
 	} else {
 		err := formTemplate.Execute(response, mfaRemovePage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func HandleManage(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	if !validSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		var (
+			userID         string = ""
+			email          string = ""
+			emailConfirmed bool   = false
+			mfaType        string = ""
+			dashButtons    []GatehouseFormElement
+		)
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, email_confirmed, mfa_type FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &email, &emailConfirmed, &mfaType)
+		if err != nil {
+			panic(err)
+		}
+
+		if email == "" {
+			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Add Email Address"))
+		} else {
+			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Change Email Address"))
+		}
+
+		if mfaType == "email" {
+			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "addmfa"), "Add MFA Device"))
+		} else if mfaType == "token" {
+			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "removemfa"), "Remove MFA Device"))
+		}
+
+		dashButtons = append(
+			dashButtons,
+			FormCreateDivider(),
+			FormCreateButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
+		)
+
+		var dashboardPage GatehouseForm = GatehouseForm{
+			appName + " - Manage Account",
+			"Manage Account",
+			"/",
+			"GET",
+			dashButtons,
+			[]OIDCButton{},
+			functionalPath,
+		}
+		err = dashTemplate.Execute(response, dashboardPage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession         bool = false
+		validCriticalSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+	}
+
+	if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if !validCriticalSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeemail"), http.StatusSeeOther)
+	} else {
+		err := formTemplate.Execute(response, emailChangePage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession         bool = false
+		validCriticalSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+	}
+
+	if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if !validCriticalSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=deleteaccount"), http.StatusSeeOther)
+	} else {
+		err := formTemplate.Execute(response, deleteAccountPage)
 		if err != nil {
 			panic(err)
 		}
@@ -548,7 +670,6 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
 
-	var validTargets []string = []string{"removemfa"}
 	target := request.URL.Query().Get("t")
 
 	if !validSession {
@@ -557,7 +678,7 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 	} else if target == "" {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Target required.")
-	} else if !listContains(validTargets, target) {
+	} else if !listContains(elevatedRedirectPages, target) {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Invalid target.")
 	} else {
@@ -642,6 +763,109 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 			if err != nil {
 				panic(err)
 			}
+		}
+	}
+}
+
+func HandleSubEmailChange(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession         bool = false
+		validCriticalSession bool = false
+		userID               string
+		username             string
+		email                string
+	)
+
+	email = strings.ToLower(request.FormValue("newemail"))
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+	}
+
+	if !validSession || !validCriticalSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if !IsValidNewEmail(email) {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Invalid email.`)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, username FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &username)
+		if err != nil && err != sql.ErrNoRows {
+			panic(err)
+		} else if err == sql.ErrNoRows {
+			response.WriteHeader(400)
+			fmt.Fprint(response, `Invalid request.`)
+		} else {
+			_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email = ?, email_confirmed = 0, email_resent = 0 WHERE id = ?", tablePrefix), email, userID)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		SendEmailConfirmationCode(userID, email, username)
+		err = formTemplate.Execute(response, confirmEmailPage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession         bool = false
+		validCriticalSession bool = false
+		userID               string
+		username             string
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+	}
+
+	if !validSession || !validCriticalSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, username FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &username)
+		if err != nil && err != sql.ErrNoRows {
+			panic(err)
+		} else if err == sql.ErrNoRows {
+			response.WriteHeader(400)
+			fmt.Fprint(response, `Invalid request.`)
+		} else {
+			_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_accounts WHERE id = ?", tablePrefix), userID)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		err = formTemplate.Execute(response, deletedAccountPage)
+		if err != nil {
+			panic(err)
 		}
 	}
 }
