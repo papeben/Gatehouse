@@ -643,6 +643,36 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 				if err != nil {
 					panic(err)
 				}
+
+				var recoveryCodes string = ""
+				for i := 0; i < 12; i++ {
+					recoveryCode := GenerateRandomNumbers(8)
+					recoveryCodes = recoveryCodes + "<br>" + recoveryCode
+					_, err = db.Exec(fmt.Sprintf("INSERT IGNORE INTO %s_recovery (user_id, code) VALUES (?, ?)", tablePrefix), userID, recoveryCode)
+					if err != nil {
+						panic(err)
+					}
+				}
+
+				var mfaValidatedPage GatehouseForm = GatehouseForm{ // Define forgot password page
+					appName + " - MFA Validated",
+					"Success",
+					"/",
+					"GET",
+					[]GatehouseFormElement{
+						FormCreateDivider(),
+						FormCreateHint("Your OTP code was validated successfully! You are now able to sign in with your authenticator OTP in the future."),
+						FormCreateDivider(),
+						FormCreateHint("Your recovery codes:"),
+						FormCreateHint(recoveryCodes),
+						FormCreateDivider(),
+						FormCreateButtonLink("/"+functionalPath+"/manage", "Back to Dashboard"),
+						FormCreateDivider(),
+					},
+					[]OIDCButton{},
+					functionalPath,
+				}
+
 				err = formTemplate.Execute(response, mfaValidatedPage)
 				if err != nil {
 					panic(err)
