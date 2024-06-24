@@ -87,6 +87,10 @@ jobs:
     - name: Build an image from Dockerfile
       run: |
         docker build -t docker.io/papeben/gatehouse:${{ github.sha }} .
+        docker run -d --name testcontainer docker.io/papeben/gatehouse:${{ github.sha }}
+        sleep 5
+        docker exec testcontainer echo "Online"
+        docker stop testcontainer
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
