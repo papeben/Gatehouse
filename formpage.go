@@ -82,9 +82,35 @@ func FormCreateSubmitInput(name string, text string) GatehouseFormElement {
 		"",
 	}
 }
+func FormCreateDangerSubmitInput(name string, text string) GatehouseFormElement {
+	return GatehouseFormElement{
+		"gh_a_danger_button gh_inp_button",
+		text,
+		false,
+		"",
+		true,
+		false,
+		"submit",
+		name,
+		"",
+	}
+}
 func FormCreateButtonLink(linkUrl string, text string) GatehouseFormElement {
 	return GatehouseFormElement{
 		"gh_a_button",
+		text,
+		true,
+		linkUrl,
+		false,
+		false,
+		"",
+		"",
+		"",
+	}
+}
+func FormCreateDangerButtonLink(linkUrl string, text string) GatehouseFormElement {
+	return GatehouseFormElement{
+		"gh_a_danger_button gh_a_button",
 		text,
 		true,
 		linkUrl,
@@ -541,8 +567,8 @@ var (
 			FormCreateHint("Are you sure you wish to delete your account?"),
 			FormCreateDivider(),
 			FormCreateCheckboxInput("confirmed"),
-			FormCreateHint("I understand this action cannot be reversed."),
-			FormCreateSubmitInput("submit", "Delete Account"),
+			FormCreateHint("I understand this action is permanent and cannot be reversed."),
+			FormCreateDangerSubmitInput("submit", "Delete Account"),
 			FormCreateDivider(),
 			FormCreateHint("Changed your mind?"),
 			FormCreateButtonLink("/"+functionalPath+"/manage", "Cancel"),

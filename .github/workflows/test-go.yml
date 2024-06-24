@@ -17,6 +17,7 @@ jobs:
           - 3306:3306
       smtp:
         image: docker.io/maildev/maildev:latest
+        options: --health-cmd "echo 'skip'" --health-interval 10s --health-timeout 5s --health-retries 5
         ports:
           - 1025:1025
     steps:
@@ -26,7 +27,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.18.1
+        go-version: 1.22.4
 
     - name: Tests
       uses: ncruces/go-coverage-report@main
@@ -44,7 +45,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.18.1
+        go-version: 1.22.4
 
     - name: Run Gosec Security Scanner
       uses: securego/gosec@master
@@ -60,7 +61,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.18.1
+        go-version: 1.22.4
 
     - name: Build
       run: go build -v -a .
@@ -76,7 +77,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.18.1
+        go-version: 1.22.4
 
     - name: Build
       run: go build -v -a .
@@ -86,6 +87,10 @@ jobs:
     - name: Build an image from Dockerfile
       run: |
         docker build -t docker.io/papeben/gatehouse:${{ github.sha }} .
+        docker run -d --name testcontainer docker.io/papeben/gatehouse:${{ github.sha }}
+        sleep 5
+        docker exec testcontainer echo "Online"
+        docker stop testcontainer
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
