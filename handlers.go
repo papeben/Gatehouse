@@ -13,11 +13,21 @@ import (
 )
 
 func HandleMain(response http.ResponseWriter, request *http.Request) { // Create main listener function
+
+	var (
+		validSession bool   = false
+		userId       string = "Unauth"
+		userEmail    string = "-"
+	)
+
 	handler := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load handler associated with URI from functionalURIs map
 	tokenCookie, tokenError := request.Cookie(sessionCookieName)
-	var validSession bool = false
+
 	if tokenError == nil {
-		validSession = IsValidSession(tokenCookie.Value)
+		validSession, userId, userEmail = IsValidSessionWithInfo(tokenCookie.Value)
+		if !validSession {
+			log(3, fmt.Sprintf("Client %s presented an invalid session token", request.RemoteAddr))
+		}
 	}
 	if handler != nil {
 		handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
@@ -28,6 +38,8 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 	} else {
 		proxy.ServeHTTP(response, request)
 	}
+
+	log(4, fmt.Sprintf("%s(%s) (%s) %s %d %s %s", userId, userEmail, request.RemoteAddr, request.Proto, request.ContentLength, request.Method, request.RequestURI))
 }
 
 func HandleLogin(response http.ResponseWriter, request *http.Request) {

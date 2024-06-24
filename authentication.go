@@ -21,12 +21,14 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 	}
 	defer db.Close()
 
+	log(4, fmt.Sprintf("User %s (%s) authenticated", userID, request.RemoteAddr))
+
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userID)
 	if err != nil {
 		panic(err)
 	}
 
-	cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
+	cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
 	http.SetCookie(response, &cookie)
 	http.Redirect(response, request, "/", http.StatusSeeOther)
 }
@@ -38,14 +40,36 @@ func IsValidSession(sessionToken string) bool {
 	}
 	defer db.Close()
 
-	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID)
+	var userId string
+
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userId)
 	if err != nil && err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
 		panic(err)
 	} else {
 		return true
+	}
+}
+
+func IsValidSessionWithInfo(sessionToken string) (bool, string, string) {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	var (
+		userID    string
+		userEmail string
+	)
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id, email FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID, &userEmail)
+	if err != nil && err == sql.ErrNoRows {
+		return false, "", ""
+	} else if err != nil {
+		panic(err)
+	} else {
+		return true, userID, userEmail
 	}
 }
 
