@@ -17,6 +17,7 @@ jobs:
           - 3306:3306
       smtp:
         image: docker.io/maildev/maildev:latest
+        options: --health-cmd "echo 'skip'" --health-interval 10s --health-timeout 5s --health-retries 5
         ports:
           - 1025:1025
     steps:
