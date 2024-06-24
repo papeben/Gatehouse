@@ -58,6 +58,14 @@ body {
     cursor: pointer;
     background-color: #f1f1f1;
 }
+.gh_a_danger_button {
+    color: red;
+}
+.gh_a_danger_button:hover {
+    cursor: pointer;
+    background-color: red;
+    color: white;
+}
 .gh_a_icon {
     float: left;
     height: 20px;
