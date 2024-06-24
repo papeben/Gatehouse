@@ -154,8 +154,8 @@ func sendMail(to string, subject string, body string) error {
 	var err error
 
 	// Create a custom tls.Config with InsecureSkipVerify set to true
-	if smtpTLS {
-		tlsConfig := &tls.Config{ // #nosec G402
+	if smtpTLS /* #nosec G402 */ {
+		tlsConfig := &tls.Config{
 			InsecureSkipVerify: smtpTLSSkipVerify,
 			ServerName:         smtpHost,
 		}

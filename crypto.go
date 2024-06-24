@@ -1,10 +1,10 @@
 package main
 
 /* #nosec G505 */
-import (
+import /* #nosec G505 */ (
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha1" // #nosec G505
+	"crypto/sha1"
 	"database/sql"
 	"encoding/base32"
 	"fmt"
