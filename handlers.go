@@ -25,6 +25,9 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 
 	if tokenError == nil {
 		validSession, userId, userEmail = IsValidSessionWithInfo(tokenCookie.Value)
+		if !validSession {
+			log(3, fmt.Sprintf("Client %s presented an invalid session token", request.RemoteAddr))
+		}
 	}
 	if handler != nil {
 		handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request

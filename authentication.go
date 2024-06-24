@@ -21,6 +21,8 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 	}
 	defer db.Close()
 
+	log(4, fmt.Sprintf("User %s (%s) authenticated", userID, request.RemoteAddr))
+
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userID)
 	if err != nil {
 		panic(err)
