@@ -7,6 +7,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -43,12 +44,14 @@ var (
 	smtpTLSSkipVerify     bool   = envWithDefaultBool("SMTP_TLS_SKIP", false)
 	senderAddress         string = envWithDefault("MAIL_ADDRESS", "gatehouse@mydomain.local")
 	webDomain             string = envWithDefault("WEB_DOMAIN", "http://localhost:8080")
+	logVerbosity          int    = envWithDefaultInt("LOG_LEVEL", 4)
 	formTemplate          *template.Template
 	emailTemplate         *template.Template
 	dashTemplate          *template.Template
 	functionalURIs        map[string]map[string]interface{}
 	proxy                 *httputil.ReverseProxy
 	elevatedRedirectPages = []string{"removemfa", "changeemail", "deleteaccount"}
+	sevMap                = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 )
 
 func main() {
@@ -81,6 +84,19 @@ func envWithDefault(variableName string, defaultString string) string {
 		return defaultString
 	} else {
 		return val
+	}
+}
+
+func envWithDefaultInt(variableName string, defaultInt int) int {
+	val := os.Getenv(variableName)
+	if len(val) == 0 {
+		return defaultInt
+	} else {
+		i, err := strconv.Atoi(val)
+		if err != nil {
+			panic(err)
+		}
+		return i
 	}
 }
 
