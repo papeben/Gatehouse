@@ -191,16 +191,16 @@ func InitDatabase(n int) {
 	_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", mysqlDatabase))
 	if err != nil {
 		if n > 1 {
-			fmt.Println("Failed to connect to database! Trying again in 5 seconds...")
+			log(2, "Failed to connect to database! Trying again in 5 seconds...")
 			time.Sleep(5 * time.Second)
 			InitDatabase(n - 1)
 		} else {
-			fmt.Println("Failed to connect to database. Exiting...")
+			log(1, "Failed to connect to database. Exiting...")
 			os.Exit(1)
 		}
 	} else {
 		db.SetConnMaxLifetime(time.Minute * 3)
-
+		log(4, "Creating database tables")
 		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NOT NULL DEFAULT '',`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar_url` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0, `mfa_type` VARCHAR(8) NOT NULL DEFAULT 'email', `mfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 		if err != nil {
 			panic(err)
