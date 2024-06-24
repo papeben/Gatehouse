@@ -36,7 +36,7 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 		proxy.ServeHTTP(response, request)
 	}
 
-	log(4, fmt.Sprintf("%s(%s) (%s) %s %s", userId, userEmail, request.RemoteAddr, request.Method, request.RequestURI))
+	log(4, fmt.Sprintf("%s(%s) (%s) %s %d %s %s", userId, userEmail, request.RemoteAddr, request.Proto, request.ContentLength, request.Method, request.RequestURI))
 }
 
 func HandleLogin(response http.ResponseWriter, request *http.Request) {
