@@ -26,7 +26,7 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 		panic(err)
 	}
 
-	cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
+	cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
 	http.SetCookie(response, &cookie)
 	http.Redirect(response, request, "/", http.StatusSeeOther)
 }
