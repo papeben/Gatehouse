@@ -185,16 +185,19 @@ func sendMail(to string, subject string, body string) error {
 		}
 		conn, err := tls.Dial("tcp", smtpHost+":"+smtpPort, tlsConfig)
 		if err != nil {
+			log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
 			return err
 		}
 		client, err = smtp.NewClient(conn, smtpHost)
 		if err != nil {
+			log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
 			return err
 		}
 	} else {
 		// Don't use TLS encryption
 		client, err = smtp.Dial(smtpHost + ":" + smtpPort)
 		if err != nil {
+			log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
 			return err
 		}
 	}
@@ -204,6 +207,7 @@ func sendMail(to string, subject string, body string) error {
 		auth := smtp.PlainAuth("", smtpUser, smtpPass, smtpHost)
 		err = client.Auth(auth)
 		if err != nil {
+			log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
 			return err
 		}
 	}
@@ -223,35 +227,41 @@ func sendMail(to string, subject string, body string) error {
 	// Send the email message
 	err = client.Mail(senderAddress)
 	if err != nil {
+		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
 		return err
 	}
 
 	err = client.Rcpt(to)
 	if err != nil {
+		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
 		return err
 	}
 
 	data, err := client.Data()
 	if err != nil {
+		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
 		return err
 	}
 
 	_, err = data.Write(message)
 	if err != nil {
+		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
 		return err
 	}
 
 	// Close the connection
 	err = data.Close()
 	if err != nil {
+		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
 		return err
 	}
 
 	err = client.Quit()
 	if err != nil {
+		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
 		return err
 	}
-
+	log(3, fmt.Sprintf("Email sent to %s via %s:%s", to, smtpHost, smtpPort))
 	return nil
 }
 
@@ -301,9 +311,7 @@ func ResetPasswordRequest(email string) bool {
 
 		err := sendMail(strings.ToLower(email), "Password Reset Request", body.String())
 		if err != nil {
-			fmt.Println(err)
-			fmt.Println("Error sending email to " + email + ". Placing link below:")
-			fmt.Println(webDomain + "/" + functionalPath + "/resetpassword?c=" + resetCode)
+			log(3, fmt.Sprint("Error sending confirm email to "+email+": "+webDomain+"/"+functionalPath+"/resetpassword?c="+resetCode))
 		}
 		return true
 	}
