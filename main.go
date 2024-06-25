@@ -50,7 +50,7 @@ var (
 	dashTemplate          *template.Template
 	functionalURIs        map[string]map[string]interface{}
 	proxy                 *httputil.ReverseProxy
-	elevatedRedirectPages        = []string{"removemfa", "changeemail", "deleteaccount"}
+	elevatedRedirectPages        = []string{"removemfa", "changeemail", "deleteaccount", "changeusername"}
 	sevMap                       = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 	gatehouseVersion      string = "%VERSION%"
 )
@@ -181,21 +181,23 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/elevate":            HandleElevateSession,
 			"/" + functionalPath + "/manage":             HandleManage,
 			"/" + functionalPath + "/changeemail":        HandleChangeEmail,
+			"/" + functionalPath + "/changeusername":     HandleChangeUsername,
 			"/" + functionalPath + "/deleteaccount":      HandleDeleteAccount,
 			"/" + functionalPath + "/recoverycode":       HandleRecoveryCode,
 		},
 		"POST": {
-			"/" + functionalPath + "/submit/register":      HandleSubRegister,
-			"/" + functionalPath + "/submit/login":         HandleSubLogin,
-			"/" + functionalPath + "/submit/resetrequest":  HandleSubResetRequest,
-			"/" + functionalPath + "/submit/reset":         HandleSubReset,
-			"/" + functionalPath + "/submit/mfa":           HandleSubOTP,
-			"/" + functionalPath + "/submit/validatemfa":   HandleSubMFAValidate,
-			"/" + functionalPath + "/submit/elevate":       HandleSubElevate,
-			"/" + functionalPath + "/submit/removemfa":     HandleSubRemoveMFA,
-			"/" + functionalPath + "/submit/changeemail":   HandleSubEmailChange,
-			"/" + functionalPath + "/submit/deleteaccount": HandleSubDeleteAccount,
-			"/" + functionalPath + "/submit/recoverycode":  HandleSubRecoveryCode,
+			"/" + functionalPath + "/submit/register":       HandleSubRegister,
+			"/" + functionalPath + "/submit/login":          HandleSubLogin,
+			"/" + functionalPath + "/submit/resetrequest":   HandleSubResetRequest,
+			"/" + functionalPath + "/submit/reset":          HandleSubReset,
+			"/" + functionalPath + "/submit/mfa":            HandleSubOTP,
+			"/" + functionalPath + "/submit/validatemfa":    HandleSubMFAValidate,
+			"/" + functionalPath + "/submit/elevate":        HandleSubElevate,
+			"/" + functionalPath + "/submit/removemfa":      HandleSubRemoveMFA,
+			"/" + functionalPath + "/submit/changeemail":    HandleSubEmailChange,
+			"/" + functionalPath + "/submit/changeusername": HandleSubUsernameChange,
+			"/" + functionalPath + "/submit/deleteaccount":  HandleSubDeleteAccount,
+			"/" + functionalPath + "/submit/recoverycode":   HandleSubRecoveryCode,
 		},
 	}
 }
@@ -220,7 +222,7 @@ func InitDatabase(n int) {
 	} else {
 		db.SetConnMaxLifetime(time.Minute * 3)
 		log(4, "Creating database tables")
-		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NOT NULL DEFAULT '',`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar_url` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0, `mfa_type` VARCHAR(8) NOT NULL DEFAULT 'email', `mfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NOT NULL DEFAULT '',`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar_url` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0, `mfa_type` VARCHAR(8) NOT NULL DEFAULT 'email', `mfa_secret` VARCHAR(16) NULL, `username_changed` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 		if err != nil {
 			log(0, fmt.Sprintf("Failed to create required table: %s", err.Error()))
 			os.Exit(1)
