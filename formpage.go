@@ -262,7 +262,7 @@ var (
 
 	confirmedUsernameChangePage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - Confirmed New Username",
-		"Email Confirmed",
+		"Username Changed",
 		"/",
 		"GET",
 		[]GatehouseFormElement{
