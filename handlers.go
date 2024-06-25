@@ -340,7 +340,7 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Change Email Address"))
 		}
 
-		if mfaType == "email" {
+		if mfaType == "email" && mfaEnabled {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "addmfa"), "Add MFA Device"))
 		} else if mfaType == "token" {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "removemfa"), "Remove MFA Device"))
