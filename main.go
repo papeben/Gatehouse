@@ -19,6 +19,7 @@ import (
 // LOAD ENVIRONMENT VARIABLES
 
 var (
+	logVerbosity          int    = envWithDefaultInt("LOG_LEVEL", 4)
 	backendServerAddr     string = envWithDefault("BACKEND_SERVER", "127.0.0.1") // Load configuration from environment or set defaults
 	backendServerPort     string = envWithDefault("BACKEND_PORT", "9000")
 	listenPort            string = envWithDefault("LISTEN_PORT", "8080")
@@ -44,24 +45,33 @@ var (
 	smtpTLSSkipVerify     bool   = envWithDefaultBool("SMTP_TLS_SKIP", false)
 	senderAddress         string = envWithDefault("MAIL_ADDRESS", "gatehouse@mydomain.local")
 	webDomain             string = envWithDefault("WEB_DOMAIN", "http://localhost:8080")
-	logVerbosity          int    = envWithDefaultInt("LOG_LEVEL", 4)
 	formTemplate          *template.Template
 	emailTemplate         *template.Template
 	dashTemplate          *template.Template
 	functionalURIs        map[string]map[string]interface{}
 	proxy                 *httputil.ReverseProxy
-	elevatedRedirectPages = []string{"removemfa", "changeemail", "deleteaccount"}
-	sevMap                = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
+	elevatedRedirectPages        = []string{"removemfa", "changeemail", "deleteaccount"}
+	sevMap                       = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
+	gatehouseVersion      string = "%VERSION%"
 )
 
 func main() {
+	fmt.Println("   _____       _       _                          ")
+	fmt.Println("  / ____|     | |     | |                         ")
+	fmt.Println(" | |  __  __ _| |_ ___| |__   ___  _   _ ___  ___ ")
+	fmt.Println(" | | |_ |/ _\\ | __/ _ \\ _ \\  / _ \\| | | / __|/ _ \\")
+	fmt.Println(" | |__| | (_| | ||  __/ | | | (_) | |_| \\__ \\  __/")
+	fmt.Println("  \\_____|\\__,_|\\__\\___|_| |_|\\___/ \\__,_|___/\\___|")
+	fmt.Println("                                                  ")
+	fmt.Println("Version " + gatehouseVersion)
 	InitDatabase(10)
 	LoadTemplates()
 	LoadFuncionalURIs()
 
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
 	if err != nil {
-		panic(err)
+		log(0, fmt.Sprintf("Unable to start listening: %s", err.Error()))
+		os.Exit(1)
 	}
 	proxy = httputil.NewSingleHostReverseProxy(url)
 	staticFiles := http.StripPrefix("/"+functionalPath+"/static/", http.FileServer(http.Dir("./assets/static/")))
@@ -72,9 +82,10 @@ func main() {
 		Addr:              ":" + listenPort,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	log(4, fmt.Sprintf("Listening for incoming requests on %s", server.Addr))
 	err = server.ListenAndServe()
 	if err != nil {
-		panic(err)
+		log(0, fmt.Sprintf("Server error: %s", err.Error()))
 	}
 }
 
@@ -83,6 +94,7 @@ func envWithDefault(variableName string, defaultString string) string {
 	if len(val) == 0 {
 		return defaultString
 	} else {
+		log(5, fmt.Sprintf("Loaded %s value '%s'", variableName, val))
 		return val
 	}
 }
@@ -94,7 +106,8 @@ func envWithDefaultInt(variableName string, defaultInt int) int {
 	} else {
 		i, err := strconv.Atoi(val)
 		if err != nil {
-			panic(err)
+			fmt.Printf("[CRITICAL] Integer parameter %s is not valid\n", val)
+			os.Exit(1)
 		}
 		return i
 	}
@@ -109,11 +122,13 @@ func envWithDefaultBool(variableName string, defaultBool bool) bool {
 	if len(val) == 0 {
 		return defaultBool
 	} else if listContains(trueValues, strings.ToLower(val)) {
+		log(5, fmt.Sprintf("Loaded %s value 'true'", variableName))
 		return true
 	} else if listContains(falseValues, strings.ToLower(val)) {
+		log(5, fmt.Sprintf("Loaded %s value 'false'", variableName))
 		return false
 	} else {
-		fmt.Printf("Invalid true/false value set for %s\n", variableName)
+		log(3, fmt.Sprintf("Invalid true/false value set for %s\n", variableName))
 		os.Exit(1)
 		return false
 	}
@@ -132,17 +147,20 @@ func LoadTemplates() {
 	var err error
 	formTemplate, err = template.ParseFiles("assets/form.html") // Preload form page template into memory
 	if err != nil {
-		panic(err)
+		log(0, fmt.Sprintf("Unable to load HTML template from assets/form.html: %s", err.Error()))
+		os.Exit(1)
 	}
 
 	emailTemplate, err = template.ParseFiles("assets/email.html") // Preload email template into memory
 	if err != nil {
-		panic(err)
+		log(0, fmt.Sprintf("Unable to load HTML template from assets/email.html: %s", err.Error()))
+		os.Exit(1)
 	}
 
-	dashTemplate, err = template.ParseFiles("assets/dashboard.html") // Preload email template into memory
+	dashTemplate, err = template.ParseFiles("assets/dashboard.html") // Preload dashboard template into memory
 	if err != nil {
-		panic(err)
+		log(0, fmt.Sprintf("Unable to load HTML template from assets/dashboard.html: %s", err.Error()))
+		os.Exit(1)
 	}
 }
 
@@ -185,7 +203,8 @@ func LoadFuncionalURIs() {
 func InitDatabase(n int) {
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/", mysqlUser, mysqlPassword, mysqlHost, mysqlPort))
 	if err != nil {
-		panic(err)
+		log(0, fmt.Sprintf("Failed to connect to create database connection: %s", err.Error()))
+		os.Exit(1)
 	}
 	defer db.Close()
 	_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", mysqlDatabase))
@@ -195,7 +214,7 @@ func InitDatabase(n int) {
 			time.Sleep(5 * time.Second)
 			InitDatabase(n - 1)
 		} else {
-			log(1, "Failed to connect to database. Exiting...")
+			log(0, "Failed to connect to database. Exiting...")
 			os.Exit(1)
 		}
 	} else {
@@ -203,27 +222,33 @@ func InitDatabase(n int) {
 		log(4, "Creating database tables")
 		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NOT NULL DEFAULT '',`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar_url` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0, `mfa_type` VARCHAR(8) NOT NULL DEFAULT 'email', `mfa_secret` VARCHAR(16) NULL,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 		if err != nil {
-			panic(err)
+			log(0, fmt.Sprintf("Failed to create required table: %s", err.Error()))
+			os.Exit(1)
 		}
 		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_sessions` (`session_token` VARCHAR(64) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `critical` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`session_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 		if err != nil {
-			panic(err)
+			log(0, fmt.Sprintf("Failed to create required table: %s", err.Error()))
+			os.Exit(1)
 		}
 		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_confirmations` (`confirmation_token` VARCHAR(32) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`confirmation_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 		if err != nil {
-			panic(err)
+			log(0, fmt.Sprintf("Failed to create required table: %s", err.Error()))
+			os.Exit(1)
 		}
 		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_resets` (`reset_token` VARCHAR(32) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`reset_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 		if err != nil {
-			panic(err)
+			log(0, fmt.Sprintf("Failed to create required table: %s", err.Error()))
+			os.Exit(1)
 		}
 		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_mfa` (`mfa_session` VARCHAR(32) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `type` VARCHAR(8) NOT NULL, `token` VARCHAR(6) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`mfa_session`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 		if err != nil {
-			panic(err)
+			log(0, fmt.Sprintf("Failed to create required table: %s", err.Error()))
+			os.Exit(1)
 		}
 		_, err = db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_recovery` (`user_id` VARCHAR(8) NOT NULL, `code` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`user_id`, `code`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 		if err != nil {
-			panic(err)
+			log(0, fmt.Sprintf("Failed to create required table: %s", err.Error()))
+			os.Exit(1)
 		}
 	}
 }
