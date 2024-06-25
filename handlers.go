@@ -544,7 +544,10 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 		passwordHash   string
 		mfaType        string
 	)
-	if username == "" || password == "" {
+	if !allowUsernameLogin {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Feature Disabled.`)
+	} else if username == "" || password == "" {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid registration details.`)
 	} else {
@@ -627,7 +630,10 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 	password := request.FormValue("password")
 	passwordConfirm := request.FormValue("passwordConfirm")
 
-	if !IsValidNewUsername(username) {
+	if !allowRegistration {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Feature Disabled.`)
+	} else if !IsValidNewUsername(username) {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid Username.`)
 	} else if !IsValidNewEmail(email) {
@@ -657,7 +663,10 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 
 func HandleSubResetRequest(response http.ResponseWriter, request *http.Request) {
 	email := request.FormValue("email")
-	if ResetPasswordRequest(email) {
+	if !allowPasswordReset {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Feature Disabled.`)
+	} else if ResetPasswordRequest(email) {
 		err := formTemplate.Execute(response, resetSentPage)
 		if err != nil {
 			panic(err)
