@@ -340,7 +340,9 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Change Email Address"))
 		}
 
-		if mfaType == "email" {
+		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
+
+		if mfaType == "email" && mfaEnabled {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "addmfa"), "Add MFA Device"))
 		} else if mfaType == "token" {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "removemfa"), "Remove MFA Device"))
@@ -396,6 +398,53 @@ func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
 		if err != nil {
 			panic(err)
 		}
+	}
+}
+
+func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
+	var (
+		userId               string
+		validSession         bool = false
+		validCriticalSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+	}
+
+	if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if !validCriticalSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeusername"), http.StatusSeeOther)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userId)
+		if err == sql.ErrNoRows {
+			err = formTemplate.Execute(response, usernameChangeBlockedPage)
+			if err != nil {
+				panic(err)
+			}
+		} else if err != nil {
+			panic(err)
+		} else {
+			err = formTemplate.Execute(response, usernameChangePage)
+			if err != nil {
+				panic(err)
+			}
+		}
+
 	}
 }
 
@@ -890,6 +939,60 @@ func HandleSubEmailChange(response http.ResponseWriter, request *http.Request) {
 		err = formTemplate.Execute(response, confirmEmailPage)
 		if err != nil {
 			panic(err)
+		}
+	}
+}
+
+func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession         bool = false
+		validCriticalSession bool = false
+		userID               string
+		username             string
+	)
+
+	username = strings.ToLower(request.FormValue("newUsername"))
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+	}
+
+	if !validSession || !validCriticalSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else if !IsValidNewUsername(username) {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Invalid username.`)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID)
+		if err != nil && err != sql.ErrNoRows {
+			panic(err)
+		} else if err == sql.ErrNoRows {
+			response.WriteHeader(400)
+			fmt.Fprint(response, `Invalid request.`)
+		} else {
+			_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET username = ?, username_changed = CURRENT_TIMESTAMP WHERE id = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix), username, userID)
+			if err != nil {
+				panic(err)
+			}
+
+			// SendEmailConfirmationCode(userID, email, username)
+			err = formTemplate.Execute(response, confirmedUsernameChangePage)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 }

@@ -283,6 +283,21 @@ var (
 		functionalPath,
 	}
 
+	confirmedUsernameChangePage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Confirmed New Username",
+		"Email Confirmed",
+		"/",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Username has been changed successfully."),
+			FormCreateSmallLink("/"+functionalPath+"/manage", "Back to site"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
 	linkExpired GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - Expired",
 		"Link Expired",
@@ -401,6 +416,39 @@ var (
 			FormCreateHint("Enter your new email address:"),
 			FormCreateTextInput("newemail", "name@example.com"),
 			FormCreateSubmitInput("submit", "Change Email"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	usernameChangePage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Change Your Username",
+		"Change Your Username",
+		"/" + functionalPath + "/submit/changeusername",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Choose your new username:"),
+			FormCreateTextInput("newUsername", "JohnSmith1234"),
+			FormCreateCheckboxInput("confirmed"),
+			FormCreateHint("I understand I can only change username once per 30 days."),
+			FormCreateDangerSubmitInput("submit", "Change Username"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	usernameChangeBlockedPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Change Your Username",
+		"Change Your Username",
+		"/",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("You have already changed your username recently."),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Back"),
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
