@@ -52,7 +52,7 @@ var (
 	proxy                 *httputil.ReverseProxy
 	elevatedRedirectPages        = []string{"removemfa", "changeemail", "deleteaccount"}
 	sevMap                       = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
-	gatehouseVersion      string = "0.0.4 DEV"
+	gatehouseVersion      string = "%VERSION%"
 )
 
 func main() {
