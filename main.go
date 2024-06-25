@@ -53,6 +53,9 @@ var (
 	elevatedRedirectPages        = []string{"removemfa", "changeemail", "deleteaccount", "changeusername"}
 	sevMap                       = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 	gatehouseVersion      string = "%VERSION%"
+	allowRegistration     bool   = envWithDefaultBool("ALLOW_REGISTRATION", true)
+	allowUsernameLogin    bool   = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
+	allowPasswordReset    bool   = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
 )
 
 func main() {
