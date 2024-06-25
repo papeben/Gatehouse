@@ -616,4 +616,18 @@ var (
 		[]OIDCButton{},
 		functionalPath,
 	}
+
+	disabledFeaturePage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Feature Disabled",
+		"Feature Disabled",
+		"",
+		"",
+		[]GatehouseFormElement{
+			FormCreateHint("This feature is disabled."),
+			FormCreateButtonLink("/", "Back to Site"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
 )

@@ -54,7 +54,7 @@ func HandleLogin(response http.ResponseWriter, request *http.Request) {
 		)
 	}
 
-	if allowPasswordReset {
+	if allowPasswordReset && allowUsernameLogin {
 		innerForm = append(innerForm,
 			FormCreateSmallLink("/"+functionalPath+"/forgot", "Forgot my password..."),
 		)
@@ -146,10 +146,18 @@ func HandleConfirmEmail(response http.ResponseWriter, request *http.Request) {
 }
 
 func HandleRegister(response http.ResponseWriter, request *http.Request) {
-	err := formTemplate.Execute(response, registrationPage)
-	if err != nil {
-		panic(err)
+	if allowRegistration {
+		err := formTemplate.Execute(response, registrationPage)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		err := formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
 	}
+
 }
 
 func HandleConfirmEmailCode(response http.ResponseWriter, request *http.Request) {
