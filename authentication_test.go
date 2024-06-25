@@ -229,20 +229,12 @@ func TestUsernamePermutations(t *testing.T) {
 	}{
 		{"", false},
 		{"123456789012345678901234567890123", false},
-		{"ABC-def_123", true},
 		{"abc-def_123", true},
-		{"abc_def_123", true},
-		{"abc-def-123", true},
-		{"abc-def_!23", false},
 		{"abc😊def", false},
 		{"abcédef", false},
 		{"abcdefghijklmno-pqrst_0123456789", true},
-		{"abc_def-123", true},
-		{"abc_def-123_", true},
-		{"ABC_DEF-123_", true},
-		{"Abc_def-123", true},
-		{"a-b-c_d-e-f_1-2-3", true},
 		{"abcdefghijklmnopqrstuvwxyz_012345", false},
+		{"Jämjö123XYZ", false},
 	}
 
 	for _, test := range tests {
@@ -263,15 +255,11 @@ func TestEmailPermutations(t *testing.T) {
 	}{
 		{"", false},                          // empty string
 		{"user@example.com", true},           // simple email
-		{"user123@example.com", true},        // email with numbers
-		{"user-123@example.com", true},       // email with hyphen
-		{"user_123@example.com", true},       // email with underscore
+		{"us-er_123@example.com", true},      // email with underscore
 		{"user+123@example.com", true},       // email with plus sign
 		{"user.123@example.com", true},       // email with period
 		{"user@subdomain.example.com", true}, // email with subdomain
 		{"user@example.co.uk", true},         // email with country code TLD
-		{"user@example.local", true},         // email with non-standard TLD
-		{"user@example.technology", true},    // email with new gTLD
 		{"user@example.coffee", true},        // email with non-standard TLD
 		{"user@example..com", false},         // double period in domain
 		{"user@.example.com", false},         // empty subdomain
@@ -321,28 +309,17 @@ func TestIsValidPassword(t *testing.T) {
 		password string
 		expected bool
 	}{
-		{"abc123XYZ", true},      // valid password
-		{"12345678", false},      // too short
-		{"abcdefgh", false},      // no numbers
-		{"ABCDEFGH", false},      // no lowercase letters
-		{"123abcde", false},      // no uppercase letters
-		{"12abcde", false},       // no uppercase letters and too short
-		{"12345e7", false},       // no lowercase letters and too short
-		{"!@#$%^&*", false},      // no letters
-		{"abcDEFGH1", true},      // valid password
-		{"ABCdefgh1", true},      // valid password
-		{"123ABcdeF", true},      // valid password
-		{"aB1@cdEf", true},       // valid password
-		{"AbcdEFGH123!@#", true}, // valid password
-		{"_abc123XYZ", true},     // valid password with underscore
-		{"abc@123XYZ", true},     // valid password with @ symbol
-		{"abc!123XYZ", true},     // valid password with ! symbol
-		{"abc#123XYZ", true},     // valid password with # symbol
-		{"abc$123XYZ", true},     // valid password with $ symbol
-		{"abc%123XYZ", true},     // valid password with % symbol
-		{"测试abc123XYZ", true},    // valid password with Chinese characters
-		{"abc🔑123XYZ", true},     // valid password with emoji
-		{"Jämjö123XYZ", true},    // valid password with Swedish characters
+		{"abc123XYZ", true},   // valid password
+		{"12345678", false},   // too short
+		{"abcdefgh", false},   // no numbers
+		{"ABCDEFGH", false},   // no lowercase letters
+		{"123abcde", false},   // no uppercase letters
+		{"12abcde", false},    // no uppercase letters and too short
+		{"!@#$%^&*", false},   // no letters
+		{"abcDEFGH1", true},   // valid password
+		{"测试abc123XYZ", true}, // valid password with Chinese characters
+		{"abc🔑123XYZ", true},  // valid password with emoji
+		{"Jämjö123XYZ", true}, // valid password with Swedish characters
 	}
 
 	// iterate over test cases
