@@ -50,18 +50,27 @@ var (
 	dashTemplate          *template.Template
 	functionalURIs        map[string]map[string]interface{}
 	proxy                 *httputil.ReverseProxy
-	elevatedRedirectPages = []string{"removemfa", "changeemail", "deleteaccount"}
-	sevMap                = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
+	elevatedRedirectPages        = []string{"removemfa", "changeemail", "deleteaccount"}
+	sevMap                       = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
+	gatehouseVersion      string = "0.0.4 DEV"
 )
 
 func main() {
+	fmt.Println("   _____       _       _                          ")
+	fmt.Println("  / ____|     | |     | |                         ")
+	fmt.Println(" | |  __  __ _| |_ ___| |__   ___  _   _ ___  ___ ")
+	fmt.Println(" | | |_ |/ _\\ | __/ _ \\ _ \\  / _ \\| | | / __|/ _ \\")
+	fmt.Println(" | |__| | (_| | ||  __/ | | | (_) | |_| \\__ \\  __/")
+	fmt.Println("  \\_____|\\__,_|\\__\\___|_| |_|\\___/ \\__,_|___/\\___|")
+	fmt.Println("                                                  ")
+	fmt.Println("Version " + gatehouseVersion)
 	InitDatabase(10)
 	LoadTemplates()
 	LoadFuncionalURIs()
 
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
 	if err != nil {
-		panic(err)
+		log(0, fmt.Sprintf("Unable to start listening: %s", err.Error()))
 	}
 	proxy = httputil.NewSingleHostReverseProxy(url)
 	staticFiles := http.StripPrefix("/"+functionalPath+"/static/", http.FileServer(http.Dir("./assets/static/")))
@@ -72,9 +81,10 @@ func main() {
 		Addr:              ":" + listenPort,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	log(4, fmt.Sprintf("Listening for incoming requests on %s", server.Addr))
 	err = server.ListenAndServe()
 	if err != nil {
-		panic(err)
+		log(0, fmt.Sprintf("Server error: %s", err.Error()))
 	}
 }
 
@@ -195,7 +205,7 @@ func InitDatabase(n int) {
 			time.Sleep(5 * time.Second)
 			InitDatabase(n - 1)
 		} else {
-			log(1, "Failed to connect to database. Exiting...")
+			log(0, "Failed to connect to database. Exiting...")
 			os.Exit(1)
 		}
 	} else {
