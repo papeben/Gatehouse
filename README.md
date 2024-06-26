@@ -88,6 +88,7 @@ Gatehouse is configured through environment variables. The names and default val
 | MYSQL_PASS	| password | The password for the MySQL user. |
 | MYSQL_DATABASE | gatehouse | The name of the MySQL database. |
 | TABLE_PREFIX	| gatehouse | The prefix to be used for all tables in the MySQL database. |
+| PUBLIC_PAGES | *unset* | Allow access to paths without authentication as a comma-separated list: e.g. "/index.html,/public/,/css/theme.css". Paths ending in a / will allow the entire subdirectory. To allow the root path but not all subdirectories, use "//". |
 | SESSION_COOKIE |	gatehouse-session | The name of the cookie used for session management. |
 | REQUIRE_AUTH	| TRUE | Whether authentication is required or not. |
 | REQUIRE_EMAIL_CONFIRM	| TRUE | Whether email confirmation is required or not. |
