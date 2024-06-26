@@ -27,6 +27,7 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 		validSession, userId, userEmail = IsValidSessionWithInfo(tokenCookie.Value)
 		if !validSession {
 			log(3, fmt.Sprintf("Client %s presented an invalid session token", request.RemoteAddr))
+			http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
 		}
 	}
 	if handler != nil {
@@ -43,6 +44,52 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 }
 
 func HandleLogin(response http.ResponseWriter, request *http.Request) {
+	var innerForm = []GatehouseFormElement{}
+
+	if allowUsernameLogin {
+		innerForm = append(
+			innerForm,
+			FormCreateDivider(),
+			FormCreateTextInput("username", "Username"),
+			FormCreatePasswordInput("password", "Password"),
+		)
+	}
+
+	if allowPasswordReset && allowUsernameLogin {
+		innerForm = append(innerForm,
+			FormCreateSmallLink("/"+functionalPath+"/forgot", "Forgot my password..."),
+		)
+	}
+
+	if allowUsernameLogin {
+		innerForm = append(
+			innerForm,
+			FormCreateSubmitInput("signin", "Sign In"),
+			FormCreateDivider(),
+		)
+	}
+
+	if allowRegistration {
+		innerForm = append(innerForm,
+			FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"),
+			FormCreateDivider(),
+		)
+	}
+
+	var loginPage GatehouseForm = GatehouseForm{ // Define login page
+		appName + " - Sign in",
+		"Sign In",
+		"/" + functionalPath + "/submit/login",
+		"POST",
+		innerForm,
+		[]OIDCButton{
+			// {"Sign In with Google", "/" + functionalPath + "/static/icons/google.png", "#fff", "#000", "/" + functionalPath + "/auth/google"},
+			// {"Sign In with Microsoft Account", "/" + functionalPath + "/static/icons/microsoft.png", "#fff", "#000", "/" + functionalPath + "/auth/microsoft"},
+			// {"Sign In with Apple ID", "/" + functionalPath + "/static/icons/apple.png", "#fff", "#000", "/" + functionalPath + "/auth/apple"},
+		},
+		functionalPath,
+	}
+
 	err := formTemplate.Execute(response, loginPage)
 	if err != nil {
 		panic(err)
@@ -51,6 +98,32 @@ func HandleLogin(response http.ResponseWriter, request *http.Request) {
 
 func HandleLogout(response http.ResponseWriter, request *http.Request) {
 	http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
+
+	var innerform = []GatehouseFormElement{}
+
+	innerform = append(
+		innerform,
+		FormCreateDivider(),
+		FormCreateHint("You have signed out."),
+		FormCreateButtonLink("/", "Back to site"),
+		FormCreateDivider(),
+		FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
+	)
+
+	if allowRegistration {
+		innerform = append(innerform, FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"))
+	}
+
+	var logoutPage = GatehouseForm{ // Define login page
+		appName + " - Sign Out",
+		"Goodbye",
+		"",
+		"",
+		innerform,
+		[]OIDCButton{},
+		functionalPath,
+	}
+
 	err := formTemplate.Execute(response, logoutPage)
 	if err != nil {
 		panic(err)
@@ -100,10 +173,18 @@ func HandleConfirmEmail(response http.ResponseWriter, request *http.Request) {
 }
 
 func HandleRegister(response http.ResponseWriter, request *http.Request) {
-	err := formTemplate.Execute(response, registrationPage)
-	if err != nil {
-		panic(err)
+	if allowRegistration {
+		err := formTemplate.Execute(response, registrationPage)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		err := formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
 	}
+
 }
 
 func HandleConfirmEmailCode(response http.ResponseWriter, request *http.Request) {
@@ -175,7 +256,13 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 	if err == nil {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
-	if !validSession {
+
+	if !allowMobileMFA {
+		err = formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else {
@@ -334,15 +421,17 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 			panic(err)
 		}
 
-		if email == "" {
+		if email == "" && allowEmailChange {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Add Email Address"))
-		} else {
+		} else if allowEmailChange {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Change Email Address"))
 		}
 
-		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
+		if allowUsernameChange {
+			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
+		}
 
-		if mfaType == "email" && mfaEnabled {
+		if mfaType == "email" && allowMobileMFA {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "addmfa"), "Add MFA Device"))
 		} else if mfaType == "token" {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "removemfa"), "Remove MFA Device"))
@@ -352,9 +441,15 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 			dashButtons,
 			FormCreateButtonLink(path.Join("/", functionalPath, "logout"), "Sign Out"),
 			FormCreateDivider(),
-			FormCreateHint("Danger Area"),
-			FormCreateDangerButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
 		)
+
+		if allowDeleteAccount {
+			dashButtons = append(
+				dashButtons,
+				FormCreateHint("Danger Area"),
+				FormCreateDangerButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
+			)
+		}
 
 		var dashboardPage GatehouseForm = GatehouseForm{
 			appName + " - Manage Account",
@@ -388,7 +483,12 @@ func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
 
-	if !validSession {
+	if !allowEmailChange {
+		err := formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !validCriticalSession {
@@ -418,7 +518,12 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
 
-	if !validSession {
+	if !allowUsernameChange {
+		err := formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !validCriticalSession {
@@ -464,7 +569,12 @@ func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
 
-	if !validSession {
+	if !allowDeleteAccount {
+		err := formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !validCriticalSession {
@@ -490,7 +600,10 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 		passwordHash   string
 		mfaType        string
 	)
-	if username == "" || password == "" {
+	if !allowUsernameLogin {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Feature Disabled.`)
+	} else if username == "" || password == "" {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid registration details.`)
 	} else {
@@ -507,7 +620,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 			panic(err)
 		} else if !CheckPasswordHash(password, passwordHash) {
 			http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
-		} else if mfaEnabled && (mfaType == "token" || mfaType == "email" && emailConfirmed) {
+		} else if allowMobileMFA && (mfaType == "token" || mfaType == "email" && emailConfirmed) {
 			// Begin multifactor session
 			sessionToken := GenerateMfaSessionToken()
 			cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
@@ -573,7 +686,10 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 	password := request.FormValue("password")
 	passwordConfirm := request.FormValue("passwordConfirm")
 
-	if !IsValidNewUsername(username) {
+	if !allowRegistration {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Feature Disabled.`)
+	} else if !IsValidNewUsername(username) {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid Username.`)
 	} else if !IsValidNewEmail(email) {
@@ -603,7 +719,10 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 
 func HandleSubResetRequest(response http.ResponseWriter, request *http.Request) {
 	email := request.FormValue("email")
-	if ResetPasswordRequest(email) {
+	if !allowPasswordReset {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `400 - Feature Disabled.`)
+	} else if ResetPasswordRequest(email) {
 		err := formTemplate.Execute(response, resetSentPage)
 		if err != nil {
 			panic(err)
@@ -709,7 +828,12 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
 
-	if !validSession {
+	if !allowMobileMFA {
+		err = formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else {
@@ -909,7 +1033,10 @@ func HandleSubEmailChange(response http.ResponseWriter, request *http.Request) {
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
 
-	if !validSession || !validCriticalSession {
+	if !allowEmailChange {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Feature disabled.`)
+	} else if !validSession || !validCriticalSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !IsValidNewEmail(email) {
@@ -963,7 +1090,10 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
 
-	if !validSession || !validCriticalSession {
+	if !allowUsernameChange {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Feature disabled.`)
+	} else if !validSession || !validCriticalSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !IsValidNewUsername(username) {
@@ -1014,8 +1144,10 @@ func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request)
 	if err == nil {
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
-
-	if !validSession || !validCriticalSession {
+	if !allowDeleteAccount {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Feature Disabled.`)
+	} else if !validSession || !validCriticalSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else {

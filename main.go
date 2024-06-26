@@ -36,7 +36,6 @@ var (
 	criticalCookieName    string = envWithDefault("CRITICAL_COOKIE", "gatehouse-crit")
 	requireAuthentication bool   = envWithDefaultBool("REQUIRE_AUTH", true)
 	requireEmailConfirm   bool   = envWithDefaultBool("REQUIRE_EMAIL_CONFIRM", true)
-	mfaEnabled            bool   = envWithDefaultBool("MFA_ENABLED", true)
 	smtpHost              string = envWithDefault("SMTP_HOST", "127.0.0.1")
 	smtpPort              string = envWithDefault("SMTP_PORT", "25")
 	smtpUser              string = envWithDefault("SMTP_USER", "")
@@ -53,6 +52,13 @@ var (
 	elevatedRedirectPages        = []string{"removemfa", "changeemail", "deleteaccount", "changeusername"}
 	sevMap                       = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 	gatehouseVersion      string = "%VERSION%"
+	allowRegistration     bool   = envWithDefaultBool("ALLOW_REGISTRATION", true)
+	allowUsernameLogin    bool   = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
+	allowPasswordReset    bool   = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
+	allowMobileMFA        bool   = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
+	allowUsernameChange   bool   = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
+	allowEmailChange      bool   = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
+	allowDeleteAccount    bool   = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
 )
 
 func main() {

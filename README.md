@@ -99,7 +99,14 @@ Gatehouse is configured through environment variables. The names and default val
 | SMTP_TLS_SKIP_VERIFY	| FALSE | Whether to skip verification of the server certificate for SMTP or not. |
 | MAIL_ADDRESS	| gatehouse@mydomain.local | The sender email address to be used for all outgoing emails. |
 | WEB_DOMAIN	| http://localhost:8080 | The full domain URL of the web application. |
-| LOG_LEVEL | 4 | Log verbosity level (0 Fatal, 1 Crit, 2 Error, 3 Warn, 4 Info, 5 Debug) | 
+| LOG_LEVEL | 4 | Log verbosity level (0 Fatal, 1 Crit, 2 Error, 3 Warn, 4 Info, 5 Debug) |
+| ALLOW_REGISTRATION | TRUE | Allow registration for unauthenticated users |
+| ALLOW_USERNAME_LOGIN | TRUE | Allow users to sign in with usernames and passwords |
+| ALLOW_PASSWORD_RESET | TRUE | Allow users to reset their passwords | 
+| ALLOW_MOBILE_MFA | TRUE | Allow users to use mobile MFA token devices | 
+| ALLOW_USERNAME_CHANGES | TRUE | Allow users to change their username |
+| ALLOW_EMAIL_CHANGES | TRUE | Allow users to change their email |
+| ALLOW_DELETE_ACCOUNT | TRUE | Allow users to delete their account |
 
 ## Roadmap
 

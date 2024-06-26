@@ -175,46 +175,6 @@ func FormCreateQR(b64Data string) GatehouseFormElement {
 }
 
 var (
-	loginPage GatehouseForm = GatehouseForm{ // Define login page
-		appName + " - Sign in",
-		"Sign In",
-		"/" + functionalPath + "/submit/login",
-		"POST",
-		[]GatehouseFormElement{
-			FormCreateDivider(),
-			FormCreateTextInput("username", "Username"),
-			FormCreatePasswordInput("password", "Password"),
-			FormCreateSmallLink("/"+functionalPath+"/forgot", "Forgot my password..."),
-			FormCreateSubmitInput("signin", "Sign In"),
-			FormCreateDivider(),
-			FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"),
-			FormCreateDivider(),
-		},
-		[]OIDCButton{
-			// {"Sign In with Google", "/" + functionalPath + "/static/icons/google.png", "#fff", "#000", "/" + functionalPath + "/auth/google"},
-			// {"Sign In with Microsoft Account", "/" + functionalPath + "/static/icons/microsoft.png", "#fff", "#000", "/" + functionalPath + "/auth/microsoft"},
-			// {"Sign In with Apple ID", "/" + functionalPath + "/static/icons/apple.png", "#fff", "#000", "/" + functionalPath + "/auth/apple"},
-		},
-		functionalPath,
-	}
-
-	logoutPage GatehouseForm = GatehouseForm{ // Define login page
-		appName + " - Sign Out",
-		"Goodbye",
-		"/" + functionalPath + "/submit/logout",
-		"GET",
-		[]GatehouseFormElement{
-			FormCreateDivider(),
-			FormCreateHint("You have signed out."),
-			FormCreateSmallLink("/", "Back to site"),
-			FormCreateDivider(),
-			FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
-			FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"),
-		},
-		[]OIDCButton{},
-		functionalPath,
-	}
-
 	registrationPage GatehouseForm = GatehouseForm{ // Define registration page
 		appName + " - Create Account",
 		"Create an Account",
@@ -285,7 +245,7 @@ var (
 
 	confirmedUsernameChangePage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - Confirmed New Username",
-		"Email Confirmed",
+		"Username Changed",
 		"/",
 		"GET",
 		[]GatehouseFormElement{
@@ -634,6 +594,20 @@ var (
 		[]GatehouseFormElement{
 			FormCreateHint("Your account has been deleted."),
 			FormCreateButtonLink("/"+functionalPath+"/manage", "Back to Site"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	disabledFeaturePage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Feature Disabled",
+		"Feature Disabled",
+		"",
+		"",
+		[]GatehouseFormElement{
+			FormCreateHint("This feature is disabled."),
+			FormCreateButtonLink("/", "Back to Site"),
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},

@@ -261,7 +261,7 @@ func sendMail(to string, subject string, body string) error {
 		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
 		return err
 	}
-	log(3, fmt.Sprintf("Email sent to %s via %s:%s", to, smtpHost, smtpPort))
+	log(4, fmt.Sprintf("Email sent to %s via %s:%s", to, smtpHost, smtpPort))
 	return nil
 }
 
