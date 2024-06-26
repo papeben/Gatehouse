@@ -27,6 +27,7 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 		validSession, userId, userEmail = IsValidSessionWithInfo(tokenCookie.Value)
 		if !validSession {
 			log(3, fmt.Sprintf("Client %s presented an invalid session token", request.RemoteAddr))
+			http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
 		}
 	}
 	if handler != nil {
@@ -97,6 +98,32 @@ func HandleLogin(response http.ResponseWriter, request *http.Request) {
 
 func HandleLogout(response http.ResponseWriter, request *http.Request) {
 	http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
+
+	var innerform = []GatehouseFormElement{}
+
+	innerform = append(
+		innerform,
+		FormCreateDivider(),
+		FormCreateHint("You have signed out."),
+		FormCreateButtonLink("/", "Back to site"),
+		FormCreateDivider(),
+		FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
+	)
+
+	if allowRegistration {
+		innerform = append(innerform, FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"))
+	}
+
+	var logoutPage = GatehouseForm{ // Define login page
+		appName + " - Sign Out",
+		"Goodbye",
+		"",
+		"",
+		innerform,
+		[]OIDCButton{},
+		functionalPath,
+	}
+
 	err := formTemplate.Execute(response, logoutPage)
 	if err != nil {
 		panic(err)
@@ -396,7 +423,7 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 
 		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
 
-		if mfaType == "email" && mfaEnabled {
+		if mfaType == "email" && allowMobileMFA {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "addmfa"), "Add MFA Device"))
 		} else if mfaType == "token" {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "removemfa"), "Remove MFA Device"))
@@ -564,7 +591,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 			panic(err)
 		} else if !CheckPasswordHash(password, passwordHash) {
 			http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
-		} else if mfaEnabled && (mfaType == "token" || mfaType == "email" && emailConfirmed) {
+		} else if allowMobileMFA && (mfaType == "token" || mfaType == "email" && emailConfirmed) {
 			// Begin multifactor session
 			sessionToken := GenerateMfaSessionToken()
 			cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}

@@ -23,7 +23,7 @@ func init() {
 func TestRegistrationFlow(t *testing.T) {
 	requireAuthentication = true
 	requireEmailConfirm = true
-	mfaEnabled = true
+	allowMobileMFA = true
 	username := GenerateRandomString(8)
 	email := username + "@testing.local"
 	password := "aG00dPasswrd4Te5t"

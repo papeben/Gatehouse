@@ -175,23 +175,6 @@ func FormCreateQR(b64Data string) GatehouseFormElement {
 }
 
 var (
-	logoutPage GatehouseForm = GatehouseForm{ // Define login page
-		appName + " - Sign Out",
-		"Goodbye",
-		"/" + functionalPath + "/submit/logout",
-		"GET",
-		[]GatehouseFormElement{
-			FormCreateDivider(),
-			FormCreateHint("You have signed out."),
-			FormCreateSmallLink("/", "Back to site"),
-			FormCreateDivider(),
-			FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
-			FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"),
-		},
-		[]OIDCButton{},
-		functionalPath,
-	}
-
 	registrationPage GatehouseForm = GatehouseForm{ // Define registration page
 		appName + " - Create Account",
 		"Create an Account",

@@ -103,6 +103,7 @@ Gatehouse is configured through environment variables. The names and default val
 | ALLOW_REGISTRATION | TRUE | Allow registration for unauthenticated users |
 | ALLOW_USERNAME_LOGIN | TRUE | Allow users to sign in with usernames and passwords |
 | ALLOW_PASSWORD_RESET | TRUE | Allow users to reset their passwords | 
+| ALLOW_MOBILE_MFA | TRUE | Allow users to use mobile MFA token devices | 
 
 ## Roadmap
 
