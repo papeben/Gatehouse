@@ -256,7 +256,13 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 	if err == nil {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
-	if !validSession {
+
+	if !allowMobileMFA {
+		err = formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else {
@@ -799,7 +805,12 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
 
-	if !validSession {
+	if !allowMobileMFA {
+		err = formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else {
