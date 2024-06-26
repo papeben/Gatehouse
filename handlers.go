@@ -441,9 +441,15 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 			dashButtons,
 			FormCreateButtonLink(path.Join("/", functionalPath, "logout"), "Sign Out"),
 			FormCreateDivider(),
-			FormCreateHint("Danger Area"),
-			FormCreateDangerButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
 		)
+
+		if allowDeleteAccount {
+			dashButtons = append(
+				dashButtons,
+				FormCreateHint("Danger Area"),
+				FormCreateDangerButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
+			)
+		}
 
 		var dashboardPage GatehouseForm = GatehouseForm{
 			appName + " - Manage Account",
@@ -563,7 +569,12 @@ func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
 
-	if !validSession {
+	if !allowDeleteAccount {
+		err := formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !validCriticalSession {
@@ -1133,8 +1144,10 @@ func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request)
 	if err == nil {
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
-
-	if !validSession || !validCriticalSession {
+	if !allowDeleteAccount {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Feature Disabled.`)
+	} else if !validSession || !validCriticalSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else {
