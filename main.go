@@ -56,6 +56,8 @@ var (
 	allowUsernameLogin    bool   = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
 	allowPasswordReset    bool   = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
 	allowMobileMFA        bool   = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
+	allowUsernameChange   bool   = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
+	allowEmailChange      bool   = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
 )
 
 func main() {

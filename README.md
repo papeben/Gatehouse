@@ -104,6 +104,8 @@ Gatehouse is configured through environment variables. The names and default val
 | ALLOW_USERNAME_LOGIN | TRUE | Allow users to sign in with usernames and passwords |
 | ALLOW_PASSWORD_RESET | TRUE | Allow users to reset their passwords | 
 | ALLOW_MOBILE_MFA | TRUE | Allow users to use mobile MFA token devices | 
+| ALLOW_USERNAME_CHANGES | TRUE | Allow users to change their username |
+| ALLOW_EMAIL_CHANGES | TRUE | Allow users to change their email |
 
 ## Roadmap
 

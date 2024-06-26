@@ -421,13 +421,15 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 			panic(err)
 		}
 
-		if email == "" {
+		if email == "" && allowEmailChange {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Add Email Address"))
-		} else {
+		} else if allowEmailChange {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Change Email Address"))
 		}
 
-		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
+		if allowUsernameChange {
+			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
+		}
 
 		if mfaType == "email" && allowMobileMFA {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "addmfa"), "Add MFA Device"))
@@ -475,7 +477,12 @@ func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
 
-	if !validSession {
+	if !allowEmailChange {
+		err := formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !validCriticalSession {
@@ -505,7 +512,12 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
 
-	if !validSession {
+	if !allowUsernameChange {
+		err := formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !validCriticalSession {
@@ -1010,7 +1022,10 @@ func HandleSubEmailChange(response http.ResponseWriter, request *http.Request) {
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
 
-	if !validSession || !validCriticalSession {
+	if !allowEmailChange {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Feature disabled.`)
+	} else if !validSession || !validCriticalSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !IsValidNewEmail(email) {
@@ -1064,7 +1079,10 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
 	}
 
-	if !validSession || !validCriticalSession {
+	if !allowUsernameChange {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Feature disabled.`)
+	} else if !validSession || !validCriticalSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !IsValidNewUsername(username) {
