@@ -49,16 +49,18 @@ var (
 	dashTemplate          *template.Template
 	functionalURIs        map[string]map[string]interface{}
 	proxy                 *httputil.ReverseProxy
-	elevatedRedirectPages        = []string{"removemfa", "changeemail", "deleteaccount", "changeusername"}
-	sevMap                       = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
-	gatehouseVersion      string = "%VERSION%"
-	allowRegistration     bool   = envWithDefaultBool("ALLOW_REGISTRATION", true)
-	allowUsernameLogin    bool   = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
-	allowPasswordReset    bool   = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
-	allowMobileMFA        bool   = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
-	allowUsernameChange   bool   = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
-	allowEmailChange      bool   = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
-	allowDeleteAccount    bool   = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
+	elevatedRedirectPages          = []string{"removemfa", "changeemail", "deleteaccount", "changeusername"}
+	sevMap                         = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
+	gatehouseVersion      string   = "%VERSION%"
+	allowRegistration     bool     = envWithDefaultBool("ALLOW_REGISTRATION", true)
+	allowUsernameLogin    bool     = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
+	allowPasswordReset    bool     = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
+	allowMobileMFA        bool     = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
+	allowUsernameChange   bool     = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
+	allowEmailChange      bool     = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
+	allowDeleteAccount    bool     = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
+	publicPages           string   = envWithDefault("PUBLIC_PAGES", "")
+	publicPageList        []string = strings.Split(publicPages, ",")
 )
 
 func main() {
