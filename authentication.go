@@ -22,7 +22,7 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 	}
 	defer db.Close()
 
-	log(4, fmt.Sprintf("User %s (%s) authenticated", userID, request.RemoteAddr))
+	logMessage(4, fmt.Sprintf("User %s (%s) authenticated", userID, request.RemoteAddr))
 
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userID)
 	if err != nil {
@@ -44,7 +44,7 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 		} else {
 			err = sendMail(email, "Sign In - New Device", username, fmt.Sprintf("A new device has signed in to your account.<br><br>If this was you, there's nothing you need to do. Otherwise, please change your password immediately."), "", "")
 			if err != nil {
-				log(3, fmt.Sprintf("User %s was not notified of new device sign in.", username))
+				logMessage(3, fmt.Sprintf("User %s was not notified of new device sign in.", username))
 			}
 		}
 	}
@@ -166,7 +166,7 @@ func SendEmailConfirmationCode(userID string, email string, username string) {
 	// Email code
 	err = sendMail(email, "Confirm your Email Address", username, fmt.Sprintf("Thank you for signing up to %s! Please confirm your email by clicking the link below:", appName), fmt.Sprintf("%s/%s/confirmcode?c=%s", webDomain, functionalPath, code), "If you did not request this action, please ignore this email.")
 	if err != nil {
-		log(1, fmt.Sprintf("Email confirmation link for user %s did not send!!!", userID))
+		logMessage(1, fmt.Sprintf("Email confirmation link for user %s did not send!!!", userID))
 	}
 }
 
@@ -265,9 +265,9 @@ func sendMail(to string, subject string, recipient string, message string, link 
 	}
 
 	if err != nil {
-		log(2, fmt.Sprintf("Error sending '%s' email to '%s': %s", subject, to, err.Error()))
+		logMessage(2, fmt.Sprintf("Error sending '%s' email to '%s': %s", subject, to, err.Error()))
 	} else {
-		log(4, fmt.Sprintf("Email '%s' to %s via %s:%s", subject, to, smtpHost, smtpPort))
+		logMessage(4, fmt.Sprintf("Email '%s' to %s via %s:%s", subject, to, smtpHost, smtpPort))
 	}
 	return err
 }
@@ -298,7 +298,7 @@ func ResetPasswordRequest(email string) bool {
 
 		err = sendMail(strings.ToLower(email), "Password Reset Request", username, fmt.Sprintf("Click the link below to reset your %s password:", appName), fmt.Sprintf("%s/%s/resetpassword?c=%s", webDomain, functionalPath, resetCode), "If you did not request this action, please disregard this email.")
 		if err != nil {
-			log(3, fmt.Sprintf("Password reset request for %s was not sent.", username))
+			logMessage(3, fmt.Sprintf("Password reset request for %s was not sent.", username))
 		}
 		return true
 	}

@@ -81,7 +81,7 @@ func main() {
 
 	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
 	if err != nil {
-		log(0, fmt.Sprintf("Unable to start listening: %s", err.Error()))
+		logMessage(0, fmt.Sprintf("Unable to start listening: %s", err.Error()))
 		os.Exit(1)
 	}
 	proxy = httputil.NewSingleHostReverseProxy(url)
@@ -93,10 +93,10 @@ func main() {
 		Addr:              ":" + listenPort,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	log(4, fmt.Sprintf("Listening for incoming requests on %s", server.Addr))
+	logMessage(4, fmt.Sprintf("Listening for incoming requests on %s", server.Addr))
 	err = server.ListenAndServe()
 	if err != nil {
-		log(0, fmt.Sprintf("Server error: %s", err.Error()))
+		logMessage(0, fmt.Sprintf("Server error: %s", err.Error()))
 	}
 }
 
@@ -105,7 +105,7 @@ func envWithDefault(variableName string, defaultString string) string {
 	if len(val) == 0 {
 		return defaultString
 	} else {
-		log(5, fmt.Sprintf("Loaded %s value '%s'", variableName, val))
+		logMessage(5, fmt.Sprintf("Loaded %s value '%s'", variableName, val))
 		return val
 	}
 }
@@ -133,13 +133,13 @@ func envWithDefaultBool(variableName string, defaultBool bool) bool {
 	if len(val) == 0 {
 		return defaultBool
 	} else if listContains(trueValues, strings.ToLower(val)) {
-		log(5, fmt.Sprintf("Loaded %s value 'true'", variableName))
+		logMessage(5, fmt.Sprintf("Loaded %s value 'true'", variableName))
 		return true
 	} else if listContains(falseValues, strings.ToLower(val)) {
-		log(5, fmt.Sprintf("Loaded %s value 'false'", variableName))
+		logMessage(5, fmt.Sprintf("Loaded %s value 'false'", variableName))
 		return false
 	} else {
-		log(3, fmt.Sprintf("Invalid true/false value set for %s\n", variableName))
+		logMessage(3, fmt.Sprintf("Invalid true/false value set for %s\n", variableName))
 		os.Exit(1)
 		return false
 	}
@@ -158,19 +158,19 @@ func LoadTemplates() {
 	var err error
 	formTemplate, err = template.ParseFiles("assets/form.html") // Preload form page template into memory
 	if err != nil {
-		log(0, fmt.Sprintf("Unable to load HTML template from assets/form.html: %s", err.Error()))
+		logMessage(0, fmt.Sprintf("Unable to load HTML template from assets/form.html: %s", err.Error()))
 		os.Exit(1)
 	}
 
 	emailTemplate, err = template.ParseFiles("assets/email.html") // Preload email template into memory
 	if err != nil {
-		log(0, fmt.Sprintf("Unable to load HTML template from assets/email.html: %s", err.Error()))
+		logMessage(0, fmt.Sprintf("Unable to load HTML template from assets/email.html: %s", err.Error()))
 		os.Exit(1)
 	}
 
 	dashTemplate, err = template.ParseFiles("assets/dashboard.html") // Preload dashboard template into memory
 	if err != nil {
-		log(0, fmt.Sprintf("Unable to load HTML template from assets/dashboard.html: %s", err.Error()))
+		logMessage(0, fmt.Sprintf("Unable to load HTML template from assets/dashboard.html: %s", err.Error()))
 		os.Exit(1)
 	}
 }
@@ -218,22 +218,22 @@ func LoadFuncionalURIs() {
 func InitDatabase(n int) {
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/", mysqlUser, mysqlPassword, mysqlHost, mysqlPort))
 	if err != nil {
-		log(0, fmt.Sprintf("Failed to connect to create database connection: %s", err.Error()))
+		logMessage(0, fmt.Sprintf("Failed to connect to create database connection: %s", err.Error()))
 		os.Exit(1)
 	}
 	_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", mysqlDatabase))
 	if err != nil {
 		if n > 1 {
-			log(2, "Failed to connect to database! Trying again in 5 seconds...")
+			logMessage(2, "Failed to connect to database! Trying again in 5 seconds...")
 			db.Close()
 			time.Sleep(5 * time.Second)
 			InitDatabase(n - 1)
 		} else {
-			log(0, "Failed to connect to database. Exiting...")
+			logMessage(0, "Failed to connect to database. Exiting...")
 			os.Exit(1)
 		}
 	} else {
-		log(4, "Creating database tables")
+		logMessage(4, "Creating database tables")
 		db.Close()
 
 		CreateDatabaseTable(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NOT NULL DEFAULT '',`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar_url` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0, `mfa_type` VARCHAR(8) NOT NULL DEFAULT 'email', `mfa_secret` VARCHAR(16) NULL, `username_changed` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
@@ -254,14 +254,14 @@ func InitDatabase(n int) {
 func CreateDatabaseTable(tableSql string) {
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/", mysqlUser, mysqlPassword, mysqlHost, mysqlPort))
 	if err != nil {
-		log(0, fmt.Sprintf("Failed to connect to create database connection: %s", err.Error()))
+		logMessage(0, fmt.Sprintf("Failed to connect to create database connection: %s", err.Error()))
 		os.Exit(1)
 	}
 	defer db.Close()
 
 	_, err = db.Exec(tableSql)
 	if err != nil {
-		log(0, fmt.Sprintf("Failed to create required table: %s", err.Error()))
+		logMessage(0, fmt.Sprintf("Failed to create required table: %s", err.Error()))
 		os.Exit(1)
 	}
 }
@@ -269,7 +269,7 @@ func CreateDatabaseTable(tableSql string) {
 func ServePage(response http.ResponseWriter, pageStruct GatehouseForm) {
 	err := formTemplate.Execute(response, confirmEmailPage)
 	if err != nil {
-		log(1, fmt.Sprintf("Error rendering page: %s", err.Error()))
+		logMessage(1, fmt.Sprintf("Error rendering page: %s", err.Error()))
 		ServeErrorPage(response)
 	}
 }
@@ -292,7 +292,7 @@ func ServeErrorPage(response http.ResponseWriter) {
 	response.WriteHeader(500)
 	err := formTemplate.Execute(response, errorPage)
 	if err != nil {
-		log(1, fmt.Sprintf("Error rendering error page: %s", err.Error()))
+		logMessage(1, fmt.Sprintf("Error rendering error page: %s", err.Error()))
 		fmt.Fprint(response, `Internal Error.`)
 	}
 }

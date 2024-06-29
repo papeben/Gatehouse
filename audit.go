@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func log(severity int, message string) {
+func logMessage(severity int, message string) {
 	var moment = time.Now()
 
 	if severity <= logVerbosity {

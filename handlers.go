@@ -27,7 +27,7 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 	if tokenError == nil {
 		validSession, userId, userEmail, emailConfirmed = IsValidSessionWithInfo(tokenCookie.Value)
 		if !validSession {
-			log(3, fmt.Sprintf("Client %s presented an invalid session token", request.RemoteAddr))
+			logMessage(3, fmt.Sprintf("Client %s presented an invalid session token", request.RemoteAddr))
 			http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
 		}
 	}
@@ -50,7 +50,7 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 		proxied = "Redirected"
 	}
 
-	log(4, fmt.Sprintf("%s(%s) (%s) %s %s %d %s %s", userId, userEmail, request.RemoteAddr, proxied, request.Proto, request.ContentLength, request.Method, request.RequestURI))
+	logMessage(4, fmt.Sprintf("%s(%s) (%s) %s %s %d %s %s", userId, userEmail, request.RemoteAddr, proxied, request.Proto, request.ContentLength, request.Method, request.RequestURI))
 }
 
 func sliceContainsPath(slice []string, path string) bool {
@@ -166,7 +166,7 @@ func HandleRecoveryCode(response http.ResponseWriter, request *http.Request) {
 			if err == sql.ErrNoRows {
 				http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
 			} else if err != nil {
-				log(1, fmt.Sprintf("Error connecting to database: %s", err.Error()))
+				logMessage(1, fmt.Sprintf("Error connecting to database: %s", err.Error()))
 				ServeErrorPage(response)
 			} else {
 				ServePage(response, mfaRecoveryCodePage)
@@ -873,7 +873,7 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 				if enableMFAAlerts {
 					err = sendMail(email, "MFA Device Added", username, "You have successfully added an MFA device to your account.", "", "")
 					if err != nil {
-						log(3, fmt.Sprintf("User %s was not sent MFA added email.", userID))
+						logMessage(3, fmt.Sprintf("User %s was not sent MFA added email.", userID))
 					}
 				}
 			} else {
@@ -991,7 +991,7 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 			if enableMFAAlerts {
 				err = sendMail(email, "MFA Device Removed", username, "You have successfully removed an MFA device to your account.", "", "If you did not request this action, change your password immediately.")
 				if err != nil {
-					log(3, fmt.Sprintf("User %s was not sent MFA removed email.", sessionUserID))
+					logMessage(3, fmt.Sprintf("User %s was not sent MFA removed email.", sessionUserID))
 				}
 			}
 		}
@@ -1106,7 +1106,7 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 			ServePage(response, confirmedUsernameChangePage)
 			err = sendMail(email, "Username Changed", username, "Your username has been changed successfully. You will be able to change your username again after 30 days.", "", "If you did not perform this action, please change your password immediately.")
 			if err != nil {
-				log(3, fmt.Sprintf("User %s was not notified of username change.", username))
+				logMessage(3, fmt.Sprintf("User %s was not notified of username change.", username))
 			}
 		}
 	}
