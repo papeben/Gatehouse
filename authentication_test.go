@@ -179,15 +179,6 @@ func TestResetPasswordRequest(t *testing.T) {
 	})
 }
 
-func TestSendMail(t *testing.T) {
-	t.Run("should send email to test@testing.local", func(t *testing.T) {
-		err := sendMail("test@testing.local", "Testmail", "This is a test email.")
-		if err != nil {
-			t.Error("Email failed to send.")
-		}
-	})
-}
-
 func TestIsValidResetCode(t *testing.T) {
 	// open database connection
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))

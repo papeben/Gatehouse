@@ -290,26 +290,6 @@ func ResetPasswordRequest(email string) bool {
 			panic(err)
 		}
 
-		var body bytes.Buffer
-		err = emailTemplate.Execute(&body, struct {
-			Title    string
-			Username string
-			Message  string
-			HasLink  bool
-			Link     string
-			AppName  string
-		}{
-			Title:    "Reset your password",
-			Username: username,
-			Message:  fmt.Sprintf("Click the link below to reset your %s password:", appName),
-			HasLink:  true,
-			Link:     fmt.Sprintf("%s/%s/resetpassword?c=%s", webDomain, functionalPath, resetCode),
-			AppName:  appName,
-		})
-		if err != nil {
-			panic(err)
-		}
-
 		sendMail(strings.ToLower(email), "Password Reset Request", username, fmt.Sprintf("Click the link below to reset your %s password:", appName), fmt.Sprintf("%s/%s/resetpassword?c=%s", webDomain, functionalPath, resetCode), "If you did not request this action, please disregard this email.")
 		return true
 	}
