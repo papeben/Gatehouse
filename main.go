@@ -60,6 +60,7 @@ var (
 	allowEmailChange      bool   = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
 	allowDeleteAccount    bool   = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
 	allowSessionRevoke    bool   = envWithDefaultBool("ALLOW_SESSION_REVOKE", true)
+	enableLoginAlerts     bool   = envWithDefaultBool("ENABLE_LOGIN_ALERTS", true)
 )
 
 func main() {

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"fmt"
+	"io"
 	"net/http"
 	"net/smtp"
 	"regexp"
@@ -31,6 +32,20 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 	cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
 	http.SetCookie(response, &cookie)
 	http.Redirect(response, request, "/", http.StatusSeeOther)
+
+	if enableLoginAlerts {
+		var (
+			username string
+			email    string
+		)
+		err = db.QueryRow(fmt.Sprintf("SELECT email, username FROM %s_accounts WHERE id = ?", tablePrefix), userID).Scan(&email, &username)
+		if err != nil {
+			panic(err)
+		} else {
+			sendMail(email, "Sign In - New Device", username, fmt.Sprintf("A new device has signed in to your account.<br><br>If this was you, there's nothing you need to do. Otherwise, please change your password immediately."), "", "")
+		}
+	}
+
 }
 
 func IsValidSession(sessionToken string) bool {
@@ -144,38 +159,21 @@ func SendEmailConfirmationCode(userID string, email string, username string) {
 		panic(err)
 	}
 
-	var body bytes.Buffer
-	err = emailTemplate.Execute(&body, struct {
-		Title    string
-		Username string
-		Message  string
-		HasLink  bool
-		Link     string
-		AppName  string
-	}{
-		Title:    "Confirm your email address",
-		Username: username,
-		Message:  fmt.Sprintf("Thank you for signing up to %s! Please confirm your email by clicking the link below:", appName),
-		HasLink:  true,
-		Link:     fmt.Sprintf("%s/%s/confirmcode?c=%s", webDomain, functionalPath, code),
-		AppName:  appName,
-	})
-	if err != nil {
-		panic(err)
-	}
-
 	// Email code
-	err = sendMail(email, "Confirm your Email Address", body.String())
-	if err != nil {
-		fmt.Println(err)
-		fmt.Println("Error sending email to " + email + ". Placing link below:")
-		fmt.Println(webDomain + "/" + functionalPath + "/confirmcode?c=" + code)
-	}
+	sendMail(email, "Confirm your Email Address", username, fmt.Sprintf("Thank you for signing up to %s! Please confirm your email by clicking the link below:", appName), fmt.Sprintf("%s/%s/confirmcode?c=%s", webDomain, functionalPath, code), "If you did not request this action, please ignore this email.")
+
 }
 
-func sendMail(to string, subject string, body string) error {
-	var client *smtp.Client
-	var err error
+func sendMail(to string, subject string, recipient string, message string, link string, closingStatement string) error {
+	var (
+		client    *smtp.Client
+		err       error
+		body      bytes.Buffer
+		hasLink   bool = false
+		hasCloser bool = false
+		content   []byte
+		data      io.WriteCloser
+	)
 
 	// Create a custom tls.Config with InsecureSkipVerify set to true
 	if smtpTLS {
@@ -184,85 +182,88 @@ func sendMail(to string, subject string, body string) error {
 			ServerName:         smtpHost,
 		}
 		conn, err := tls.Dial("tcp", smtpHost+":"+smtpPort, tlsConfig)
-		if err != nil {
-			log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
-			return err
-		}
-		client, err = smtp.NewClient(conn, smtpHost)
-		if err != nil {
-			log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
-			return err
+		if err == nil {
+			client, err = smtp.NewClient(conn, smtpHost)
 		}
 	} else {
 		// Don't use TLS encryption
 		client, err = smtp.Dial(smtpHost + ":" + smtpPort)
-		if err != nil {
-			log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
-			return err
-		}
 	}
 
 	// Authenticate with the server if needed
-	if smtpUser != "" && smtpPass != "" {
+	if err == nil && smtpUser != "" && smtpPass != "" {
 		auth := smtp.PlainAuth("", smtpUser, smtpPass, smtpHost)
 		err = client.Auth(auth)
-		if err != nil {
-			log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
-			return err
+	}
+
+	if err == nil {
+		// Compose the email message
+		if link != "" {
+			hasLink = true
 		}
+		if closingStatement != "" {
+			hasCloser = true
+		}
+		err = emailTemplate.Execute(&body, struct {
+			Title            string
+			Recipient        string
+			Message          string
+			HasLink          bool
+			Link             string
+			HasCloser        bool
+			ClosingStatement string
+			AppName          string
+		}{
+			Title:            subject,
+			Recipient:        recipient,
+			Message:          message,
+			HasLink:          hasLink,
+			Link:             link,
+			HasCloser:        hasCloser,
+			ClosingStatement: closingStatement,
+			AppName:          appName,
+		})
 	}
 
-	// Set the sender and recipient
-	from := senderAddress
+	if err == nil {
+		// Set the sender and recipient
+		from := senderAddress
+		content = []byte("To: " + to + "\r\n" +
+			"From: " + appName + " <" + from + ">\r\n" +
+			"Subject: " + subject + "\r\n" +
+			"MIME-version: 1.0;\r\n" +
+			"Content-Type: text/html; charset=\"UTF-8\";\r\n" +
+			"\r\n" +
+			body.String() + "\r\n")
 
-	// Compose the email message
-	message := []byte("To: " + to + "\r\n" +
-		"From: " + appName + " <" + from + ">\r\n" +
-		"Subject: " + subject + "\r\n" +
-		"MIME-version: 1.0;\r\n" +
-		"Content-Type: text/html; charset=\"UTF-8\";\r\n" +
-		"\r\n" +
-		body + "\r\n")
-
-	// Send the email message
-	err = client.Mail(senderAddress)
-	if err != nil {
-		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
-		return err
+		// Send the email message
+		err = client.Mail(senderAddress)
 	}
 
-	err = client.Rcpt(to)
-	if err != nil {
-		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
-		return err
+	if err == nil {
+		err = client.Rcpt(to)
 	}
-
-	data, err := client.Data()
-	if err != nil {
-		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
-		return err
+	if err == nil {
+		data, err = client.Data()
 	}
-
-	_, err = data.Write(message)
-	if err != nil {
-		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
-		return err
+	if err == nil {
+		_, err = data.Write(content)
 	}
 
 	// Close the connection
-	err = data.Close()
-	if err != nil {
-		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
-		return err
+	if err == nil {
+		err = data.Close()
+	}
+	if err == nil {
+		err = client.Quit()
 	}
 
-	err = client.Quit()
 	if err != nil {
-		log(3, fmt.Sprintf("Connection to SMTP server failed: %s", err.Error()))
-		return err
+		log(2, fmt.Sprintf("Error sending '%s' email to '%s': %s", subject, to, err.Error()))
+	} else {
+		log(4, fmt.Sprintf("Email '%s' to %s via %s:%s", subject, to, smtpHost, smtpPort))
 	}
-	log(4, fmt.Sprintf("Email sent to %s via %s:%s", to, smtpHost, smtpPort))
-	return nil
+	return err
 }
 
 func ResetPasswordRequest(email string) bool {
@@ -309,10 +310,7 @@ func ResetPasswordRequest(email string) bool {
 			panic(err)
 		}
 
-		err := sendMail(strings.ToLower(email), "Password Reset Request", body.String())
-		if err != nil {
-			log(3, fmt.Sprint("Error sending confirm email to "+email+": "+webDomain+"/"+functionalPath+"/resetpassword?c="+resetCode))
-		}
+		sendMail(strings.ToLower(email), "Password Reset Request", username, fmt.Sprintf("Click the link below to reset your %s password:", appName), fmt.Sprintf("%s/%s/resetpassword?c=%s", webDomain, functionalPath, resetCode), "If you did not request this action, please disregard this email.")
 		return true
 	}
 }

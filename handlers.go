@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
@@ -676,7 +675,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(response, `400 - Feature Disabled.`)
 	} else if username == "" || password == "" {
 		response.WriteHeader(400)
-		fmt.Fprint(response, `400 - Invalid registration details.`)
+		fmt.Fprint(response, `400 - Invalid login details.`)
 	} else {
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 		if err != nil {
@@ -703,32 +702,8 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 				if err != nil {
 					panic(err)
 				}
-				var body bytes.Buffer
-				err = emailTemplate.Execute(&body, struct {
-					Title    string
-					Username string
-					Message  string
-					HasLink  bool
-					Link     string
-					AppName  string
-				}{
-					Title:    "OTP Token",
-					Username: username,
-					Message:  fmt.Sprintf("Your OTP code for %s is: %s", appName, mfaToken),
-					HasLink:  false,
-					Link:     "",
-					AppName:  appName,
-				})
-				if err != nil {
-					panic(err)
-				}
 
-				err = sendMail(strings.ToLower(email), "Sign In - OTP", body.String())
-				if err != nil {
-					fmt.Println(err)
-					fmt.Println("Error sending email to " + email + ". Placing MFA code below:")
-					fmt.Println(mfaToken)
-				}
+				sendMail(strings.ToLower(email), "Sign In - OTP", username, fmt.Sprintf("Your OTP code for %s is: %s", appName, mfaToken), "", "<b>If you did not request this action, please change your password immediately.</b>")
 
 				err = formTemplate.Execute(response, mfaEmailPage)
 				if err != nil {
