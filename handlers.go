@@ -421,6 +421,15 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 			panic(err)
 		}
 
+		// Account info options
+		if allowEmailChange || allowUsernameChange {
+			dashButtons = append(
+				dashButtons,
+				FormCreateDivider(),
+				FormCreateHint("Account Details"),
+			)
+		}
+
 		if email == "" && allowEmailChange {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Add Email Address"))
 		} else if allowEmailChange {
@@ -429,6 +438,16 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 
 		if allowUsernameChange {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
+		}
+
+		// Security options
+
+		if allowMobileMFA || allowSessionRevoke {
+			dashButtons = append(
+				dashButtons,
+				FormCreateDivider(),
+				FormCreateHint("Account Security"),
+			)
 		}
 
 		if mfaType == "email" && allowMobileMFA {
@@ -440,12 +459,19 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 		dashButtons = append(
 			dashButtons,
 			FormCreateButtonLink(path.Join("/", functionalPath, "logout"), "Sign Out"),
-			FormCreateDivider(),
 		)
+
+		if allowSessionRevoke {
+			dashButtons = append(
+				dashButtons,
+				FormCreateButtonLink(path.Join("/", functionalPath, "revokesessions"), "Sign Out All Devices"),
+			)
+		}
 
 		if allowDeleteAccount {
 			dashButtons = append(
 				dashButtons,
+				FormCreateDivider(),
 				FormCreateHint("Danger Area"),
 				FormCreateDangerButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
 			)
