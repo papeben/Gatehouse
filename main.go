@@ -61,6 +61,7 @@ var (
 	allowDeleteAccount    bool   = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
 	allowSessionRevoke    bool   = envWithDefaultBool("ALLOW_SESSION_REVOKE", true)
 	enableLoginAlerts     bool   = envWithDefaultBool("ENABLE_LOGIN_ALERTS", true)
+	enableMFAAlerts       bool   = envWithDefaultBool("ALLOW_MFA_ALERTS", true)
 )
 
 func main() {

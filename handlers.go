@@ -872,6 +872,8 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 		submitOtp    string = request.FormValue("otp")
 		mfaSecret    string
 		userID       string
+		email        string
+		username     string
 		validSession bool = false
 	)
 	sessionCookie, err := request.Cookie(sessionCookieName)
@@ -894,7 +896,7 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 		}
 		defer db.Close()
 
-		err = db.QueryRow(fmt.Sprintf("SELECT id, mfa_secret FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND mfa_type = 'email' AND mfa_secret IS NOT NULL", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &mfaSecret)
+		err = db.QueryRow(fmt.Sprintf("SELECT id, mfa_secret, email, username FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND mfa_type = 'email' AND mfa_secret IS NOT NULL", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &mfaSecret, &email, &username)
 		if err == sql.ErrNoRows {
 			response.WriteHeader(400)
 			fmt.Fprint(response, `Invalid Request.`)
@@ -927,10 +929,12 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 					"GET",
 					[]GatehouseFormElement{
 						FormCreateDivider(),
-						FormCreateHint("Your OTP code was validated successfully! You are now able to sign in with your authenticator OTP in the future."),
+						FormCreateHint("Your MFA device was successfully registered. You are now able to sign in with your authenticator OTP in the future."),
 						FormCreateDivider(),
+						FormCreateHint("In the event you lose your MFA device, a recovery code can be used instead."),
 						FormCreateHint("Your recovery codes:"),
 						FormCreateHint(recoveryCodes),
+						FormCreateHint("Ensure these are recorded somewhere safe."),
 						FormCreateDivider(),
 						FormCreateButtonLink("/"+functionalPath+"/manage", "Back to Dashboard"),
 						FormCreateDivider(),
@@ -942,6 +946,12 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 				err = formTemplate.Execute(response, mfaValidatedPage)
 				if err != nil {
 					panic(err)
+				}
+				if enableMFAAlerts {
+					err = sendMail(email, "MFA Device Added", username, "You have successfully added an MFA device to your account.", "", "")
+					if err != nil {
+						log(3, fmt.Sprintf("User %s was not sent MFA added email.", userID))
+					}
 				}
 			} else {
 				response.WriteHeader(400)
@@ -1009,6 +1019,8 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 		validSession         bool = false
 		validCriticalSession bool = false
 		mfaType              string
+		username             string
+		email                string
 		sessionUserID        string
 		criticalUserID       string
 	)
@@ -1039,7 +1051,7 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 		if err != nil {
 			panic(err)
 		}
-		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND critical = 1", tablePrefix, tablePrefix), critialSessionCookie.Value).Scan(&criticalUserID)
+		err = db.QueryRow(fmt.Sprintf("SELECT id, email, username FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND critical = 1", tablePrefix, tablePrefix), critialSessionCookie.Value).Scan(&criticalUserID, &email, &username)
 		if err != nil {
 			panic(err)
 		}
@@ -1058,6 +1070,12 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 			err = formTemplate.Execute(response, mfaRemovedPage)
 			if err != nil {
 				panic(err)
+			}
+			if enableMFAAlerts {
+				err = sendMail(email, "MFA Device Removed", username, "You have successfully removed an MFA device to your account.", "", "If you did not request this action, change your password immediately.")
+				if err != nil {
+					log(3, fmt.Sprintf("User %s was not sent MFA removed email.", sessionUserID))
+				}
 			}
 		}
 	}
