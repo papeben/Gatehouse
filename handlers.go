@@ -703,12 +703,17 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 					panic(err)
 				}
 
-				sendMail(strings.ToLower(email), "Sign In - OTP", username, fmt.Sprintf("Your OTP code for %s is: %s", appName, mfaToken), "", "<b>If you did not request this action, please change your password immediately.</b>")
+				err = sendMail(strings.ToLower(email), "Sign In - OTP", username, fmt.Sprintf("Your OTP code for %s is: %s", appName, mfaToken), "", "<b>If you did not request this action, please change your password immediately.</b>")
 
-				err = formTemplate.Execute(response, mfaEmailPage)
 				if err != nil {
-					panic(err)
+					ReturnErrorPage(response, request)
+				} else {
+					err = formTemplate.Execute(response, mfaEmailPage)
+					if err != nil {
+						panic(err)
+					}
 				}
+
 			} else {
 				_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "totp", userID, "")
 				if err != nil {
@@ -1170,7 +1175,10 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 			if err != nil {
 				panic(err)
 			}
-			sendMail(email, "Username Changed", username, "Your username has been changed successfully. You will be able to change your username again after 30 days.", "", "If you did not perform this action, please change your password immediately.")
+			err = sendMail(email, "Username Changed", username, "Your username has been changed successfully. You will be able to change your username again after 30 days.", "", "If you did not perform this action, please change your password immediately.")
+			if err != nil {
+				log(3, fmt.Sprintf("User %s was not notified of username change.", username))
+			}
 		}
 	}
 }

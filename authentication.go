@@ -42,7 +42,10 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 		if err != nil {
 			panic(err)
 		} else {
-			sendMail(email, "Sign In - New Device", username, fmt.Sprintf("A new device has signed in to your account.<br><br>If this was you, there's nothing you need to do. Otherwise, please change your password immediately."), "", "")
+			err = sendMail(email, "Sign In - New Device", username, fmt.Sprintf("A new device has signed in to your account.<br><br>If this was you, there's nothing you need to do. Otherwise, please change your password immediately."), "", "")
+			if err != nil {
+				log(3, fmt.Sprintf("User %s was not notified of new device sign in.", username))
+			}
 		}
 	}
 
@@ -160,8 +163,10 @@ func SendEmailConfirmationCode(userID string, email string, username string) {
 	}
 
 	// Email code
-	sendMail(email, "Confirm your Email Address", username, fmt.Sprintf("Thank you for signing up to %s! Please confirm your email by clicking the link below:", appName), fmt.Sprintf("%s/%s/confirmcode?c=%s", webDomain, functionalPath, code), "If you did not request this action, please ignore this email.")
-
+	err = sendMail(email, "Confirm your Email Address", username, fmt.Sprintf("Thank you for signing up to %s! Please confirm your email by clicking the link below:", appName), fmt.Sprintf("%s/%s/confirmcode?c=%s", webDomain, functionalPath, code), "If you did not request this action, please ignore this email.")
+	if err != nil {
+		log(1, fmt.Sprintf("Email confirmation link for user %s did not send!!!", userID))
+	}
 }
 
 func sendMail(to string, subject string, recipient string, message string, link string, closingStatement string) error {
@@ -290,7 +295,10 @@ func ResetPasswordRequest(email string) bool {
 			panic(err)
 		}
 
-		sendMail(strings.ToLower(email), "Password Reset Request", username, fmt.Sprintf("Click the link below to reset your %s password:", appName), fmt.Sprintf("%s/%s/resetpassword?c=%s", webDomain, functionalPath, resetCode), "If you did not request this action, please disregard this email.")
+		err = sendMail(strings.ToLower(email), "Password Reset Request", username, fmt.Sprintf("Click the link below to reset your %s password:", appName), fmt.Sprintf("%s/%s/resetpassword?c=%s", webDomain, functionalPath, resetCode), "If you did not request this action, please disregard this email.")
+		if err != nil {
+			log(3, fmt.Sprintf("Password reset request for %s was not sent.", username))
+		}
 		return true
 	}
 }
@@ -411,4 +419,26 @@ func IsValidPassword(password string) bool {
 		}
 	}
 	return hasDigit
+}
+
+func ReturnErrorPage(response http.ResponseWriter, request *http.Request) {
+	var errorPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Error Occurred",
+		"Error Occurred",
+		"",
+		"",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint(fmt.Sprintf("We're currently experiencing issues. Please try again later.")),
+			FormCreateButtonLink("/", "Back to site"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+	response.WriteHeader(500)
+	err := formTemplate.Execute(response, errorPage)
+	if err != nil {
+		panic(err)
+	}
 }
