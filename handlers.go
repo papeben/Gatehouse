@@ -111,10 +111,7 @@ func HandleLogin(response http.ResponseWriter, request *http.Request) {
 		functionalPath,
 	}
 
-	err := formTemplate.Execute(response, loginPage)
-	if err != nil {
-		panic(err)
-	}
+	ServePage(response, loginPage)
 }
 
 func HandleLogout(response http.ResponseWriter, request *http.Request) {
@@ -145,17 +142,11 @@ func HandleLogout(response http.ResponseWriter, request *http.Request) {
 		functionalPath,
 	}
 
-	err := formTemplate.Execute(response, logoutPage)
-	if err != nil {
-		panic(err)
-	}
+	ServePage(response, logoutPage)
 }
 
 func HandleForgotPassword(response http.ResponseWriter, request *http.Request) {
-	err := formTemplate.Execute(response, forgotPasswordPage)
-	if err != nil {
-		panic(err)
-	}
+	ServePage(response, forgotPasswordPage)
 }
 
 func HandleRecoveryCode(response http.ResponseWriter, request *http.Request) {
@@ -168,59 +159,41 @@ func HandleRecoveryCode(response http.ResponseWriter, request *http.Request) {
 	} else {
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ? AND used = 0 AND type = 'totp'", tablePrefix), mfaCookie.Value).Scan(&userID)
-		if err == sql.ErrNoRows {
-			http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
-		} else if err != nil {
-			panic(err)
+			ServeErrorPage(response)
 		} else {
-			err := formTemplate.Execute(response, mfaRecoveryCodePage)
-			if err != nil {
-				panic(err)
+			defer db.Close()
+			err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ? AND used = 0 AND type = 'totp'", tablePrefix), mfaCookie.Value).Scan(&userID)
+			if err == sql.ErrNoRows {
+				http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+			} else if err != nil {
+				log(1, fmt.Sprintf("Error connecting to database: %s", err.Error()))
+				ServeErrorPage(response)
+			} else {
+				ServePage(response, mfaRecoveryCodePage)
 			}
 		}
 	}
 }
 
 func HandleConfirmEmail(response http.ResponseWriter, request *http.Request) {
-	err := formTemplate.Execute(response, confirmEmailPage)
-	if err != nil {
-		panic(err)
-	}
+	ServePage(response, confirmEmailPage)
 }
 
 func HandleRegister(response http.ResponseWriter, request *http.Request) {
 	if allowRegistration {
-		err := formTemplate.Execute(response, registrationPage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, registrationPage)
 	} else {
-		err := formTemplate.Execute(response, disabledFeaturePage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, disabledFeaturePage)
 	}
-
 }
 
 func HandleConfirmEmailCode(response http.ResponseWriter, request *http.Request) {
 	emailCode := request.URL.Query().Get("c")
 	if ConfirmEmailCode(emailCode) {
-		err := formTemplate.Execute(response, confirmedEmailPage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, confirmedEmailPage)
 	} else {
 		response.WriteHeader(400)
-		err := formTemplate.Execute(response, linkExpired)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, linkExpired)
 	}
 }
 
@@ -229,15 +202,9 @@ func HandlePasswordResetCode(response http.ResponseWriter, request *http.Request
 	if resetCode != "" && IsValidResetCode(resetCode) {
 		customResetPage := resetPage
 		customResetPage.FormAction += fmt.Sprintf("?c=%s", resetCode)
-		err := formTemplate.Execute(response, customResetPage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, customResetPage)
 	} else {
-		err := formTemplate.Execute(response, linkExpired)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, linkExpired)
 	}
 }
 
@@ -246,18 +213,12 @@ func HandleResendConfirmation(response http.ResponseWriter, request *http.Reques
 	if err != nil {
 		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
 	} else if IsValidSession(tokenCookie.Value) && PendingEmailApproval(tokenCookie.Value) && ResendConfirmationEmail(tokenCookie.Value) {
-		err := formTemplate.Execute(response, resendConfirmationPage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, resendConfirmationPage)
 	} else if IsValidSession(tokenCookie.Value) && !PendingEmailApproval(tokenCookie.Value) {
 		http.Redirect(response, request, "/", http.StatusSeeOther)
 	} else {
 		response.WriteHeader(400)
-		err := formTemplate.Execute(response, linkExpired)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, linkExpired)
 	}
 }
 
@@ -279,10 +240,7 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 	}
 
 	if !allowMobileMFA {
-		err = formTemplate.Execute(response, disabledFeaturePage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, disabledFeaturePage)
 	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
@@ -346,10 +304,7 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 				[]OIDCButton{},
 				functionalPath,
 			}
-			err = formTemplate.Execute(response, enrolPage)
-			if err != nil {
-				panic(err)
-			}
+			ServePage(response, enrolPage)
 		}
 	}
 }
@@ -375,10 +330,7 @@ func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
 	} else {
 		var editedPage GatehouseForm = elevateSessionPage
 		editedPage.FormAction = path.Join("/", functionalPath, fmt.Sprintf("/submit/elevate?t=%s", target))
-		err := formTemplate.Execute(response, editedPage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, editedPage)
 	}
 }
 
@@ -404,10 +356,7 @@ func HandleRemoveMFA(response http.ResponseWriter, request *http.Request) {
 	} else if !validCriticalSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=removemfa"), http.StatusSeeOther)
 	} else {
-		err := formTemplate.Execute(response, mfaRemovePage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, mfaRemovePage)
 	}
 }
 
@@ -531,20 +480,14 @@ func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
 	}
 
 	if !allowEmailChange {
-		err := formTemplate.Execute(response, disabledFeaturePage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, disabledFeaturePage)
 	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !validCriticalSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeemail"), http.StatusSeeOther)
 	} else {
-		err := formTemplate.Execute(response, emailChangePage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, emailChangePage)
 	}
 }
 
@@ -566,10 +509,7 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 	}
 
 	if !allowUsernameChange {
-		err := formTemplate.Execute(response, disabledFeaturePage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, disabledFeaturePage)
 	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
@@ -584,17 +524,11 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 
 		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userId)
 		if err == sql.ErrNoRows {
-			err = formTemplate.Execute(response, usernameChangeBlockedPage)
-			if err != nil {
-				panic(err)
-			}
+			ServePage(response, usernameChangeBlockedPage)
 		} else if err != nil {
 			panic(err)
 		} else {
-			err = formTemplate.Execute(response, usernameChangePage)
-			if err != nil {
-				panic(err)
-			}
+			ServePage(response, usernameChangePage)
 		}
 
 	}
@@ -617,20 +551,14 @@ func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
 	}
 
 	if !allowDeleteAccount {
-		err := formTemplate.Execute(response, disabledFeaturePage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, disabledFeaturePage)
 	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else if !validCriticalSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=deleteaccount"), http.StatusSeeOther)
 	} else {
-		err := formTemplate.Execute(response, deleteAccountPage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, deleteAccountPage)
 	}
 }
 
@@ -645,15 +573,12 @@ func HandleSessionRevoke(response http.ResponseWriter, request *http.Request) {
 	}
 
 	if !allowSessionRevoke {
-		err := formTemplate.Execute(response, disabledFeaturePage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, disabledFeaturePage)
 	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else {
-		var deleteAccountPage = GatehouseForm{
+		var sessionRevokePage = GatehouseForm{
 			appName + " - Sign Out All Devices",
 			"Sign Out All Devices",
 			"/" + functionalPath + "/submit/revokesessions",
@@ -672,10 +597,7 @@ func HandleSessionRevoke(response http.ResponseWriter, request *http.Request) {
 			functionalPath,
 		}
 
-		err := formTemplate.Execute(response, deleteAccountPage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, sessionRevokePage)
 	}
 }
 
@@ -728,12 +650,9 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 				err = sendMail(strings.ToLower(email), "Sign In - OTP", username, fmt.Sprintf("Your OTP code for %s is: %s", appName, mfaToken), "", "<b>If you did not request this action, please change your password immediately.</b>")
 
 				if err != nil {
-					ReturnErrorPage(response, request)
+					ServeErrorPage(response)
 				} else {
-					err = formTemplate.Execute(response, mfaEmailPage)
-					if err != nil {
-						panic(err)
-					}
+					ServePage(response, mfaEmailPage)
 				}
 
 			} else {
@@ -741,10 +660,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 				if err != nil {
 					panic(err)
 				}
-				err = formTemplate.Execute(response, mfaTokenPage)
-				if err != nil {
-					panic(err)
-				}
+				ServePage(response, mfaTokenPage)
 			}
 		} else {
 			AuthenticateRequestor(response, request, userID)
@@ -796,15 +712,9 @@ func HandleSubResetRequest(response http.ResponseWriter, request *http.Request) 
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Feature Disabled.`)
 	} else if ResetPasswordRequest(email) {
-		err := formTemplate.Execute(response, resetSentPage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, resetSentPage)
 	} else {
-		err := formTemplate.Execute(response, resetNotSentPage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, resetNotSentPage)
 	}
 }
 
@@ -832,10 +742,7 @@ func HandleSubReset(response http.ResponseWriter, request *http.Request) {
 			if err != nil {
 				panic(err)
 			}
-			err := formTemplate.Execute(response, resetSuccessPage)
-			if err != nil {
-				panic(err)
-			}
+			ServePage(response, resetSuccessPage)
 		}
 	} else {
 		response.WriteHeader(400)
@@ -904,10 +811,7 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 	}
 
 	if !allowMobileMFA {
-		err = formTemplate.Execute(response, disabledFeaturePage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, disabledFeaturePage)
 	} else if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
@@ -965,10 +869,7 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 					functionalPath,
 				}
 
-				err = formTemplate.Execute(response, mfaValidatedPage)
-				if err != nil {
-					panic(err)
-				}
+				ServePage(response, mfaValidatedPage)
 				if enableMFAAlerts {
 					err = sendMail(email, "MFA Device Added", username, "You have successfully added an MFA device to your account.", "", "")
 					if err != nil {
@@ -977,10 +878,7 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 				}
 			} else {
 				response.WriteHeader(400)
-				err = formTemplate.Execute(response, mfaFailedPage)
-				if err != nil {
-					panic(err)
-				}
+				ServePage(response, mfaFailedPage)
 			}
 		}
 	}
@@ -1089,10 +987,7 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 			if err != nil {
 				panic(err)
 			}
-			err = formTemplate.Execute(response, mfaRemovedPage)
-			if err != nil {
-				panic(err)
-			}
+			ServePage(response, mfaRemovedPage)
 			if enableMFAAlerts {
 				err = sendMail(email, "MFA Device Removed", username, "You have successfully removed an MFA device to your account.", "", "If you did not request this action, change your password immediately.")
 				if err != nil {
@@ -1154,10 +1049,7 @@ func HandleSubEmailChange(response http.ResponseWriter, request *http.Request) {
 		}
 
 		SendEmailConfirmationCode(userID, email, username)
-		err = formTemplate.Execute(response, confirmEmailPage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, confirmEmailPage)
 	}
 }
 
@@ -1211,10 +1103,7 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 			}
 
 			// SendEmailConfirmationCode(userID, email, username)
-			err = formTemplate.Execute(response, confirmedUsernameChangePage)
-			if err != nil {
-				panic(err)
-			}
+			ServePage(response, confirmedUsernameChangePage)
 			err = sendMail(email, "Username Changed", username, "Your username has been changed successfully. You will be able to change your username again after 30 days.", "", "If you did not perform this action, please change your password immediately.")
 			if err != nil {
 				log(3, fmt.Sprintf("User %s was not notified of username change.", username))
@@ -1266,10 +1155,7 @@ func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request)
 			}
 		}
 
-		err = formTemplate.Execute(response, deletedAccountPage)
-		if err != nil {
-			panic(err)
-		}
+		ServePage(response, deletedAccountPage)
 	}
 }
 
@@ -1355,10 +1241,7 @@ func HandleSubSessionRevoke(response http.ResponseWriter, request *http.Request)
 				}
 
 				http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
-				err := formTemplate.Execute(response, logoutPage)
-				if err != nil {
-					panic(err)
-				}
+				ServePage(response, logoutPage)
 			}
 		}
 	}

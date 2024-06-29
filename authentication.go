@@ -421,25 +421,3 @@ func IsValidPassword(password string) bool {
 	}
 	return hasDigit
 }
-
-func ReturnErrorPage(response http.ResponseWriter, request *http.Request) {
-	var errorPage GatehouseForm = GatehouseForm{ // Define forgot password page
-		appName + " - Error Occurred",
-		"Error Occurred",
-		"",
-		"",
-		[]GatehouseFormElement{
-			FormCreateDivider(),
-			FormCreateHint(fmt.Sprintf("We're currently experiencing issues. Please try again later.")),
-			FormCreateButtonLink("/", "Back to site"),
-			FormCreateDivider(),
-		},
-		[]OIDCButton{},
-		functionalPath,
-	}
-	response.WriteHeader(500)
-	err := formTemplate.Execute(response, errorPage)
-	if err != nil {
-		panic(err)
-	}
-}

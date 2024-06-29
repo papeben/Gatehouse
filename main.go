@@ -49,19 +49,19 @@ var (
 	dashTemplate          *template.Template
 	functionalURIs        map[string]map[string]interface{}
 	proxy                 *httputil.ReverseProxy
-	elevatedRedirectPages        = []string{"removemfa", "changeemail", "deleteaccount", "changeusername"}
-	sevMap                       = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
-	gatehouseVersion      string = "%VERSION%"
-	allowRegistration     bool   = envWithDefaultBool("ALLOW_REGISTRATION", true)
-	allowUsernameLogin    bool   = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
-	allowPasswordReset    bool   = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
-	allowMobileMFA        bool   = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
-	allowUsernameChange   bool   = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
-	allowEmailChange      bool   = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
-	allowDeleteAccount    bool   = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
-	allowSessionRevoke    bool   = envWithDefaultBool("ALLOW_SESSION_REVOKE", true)
-	enableLoginAlerts     bool   = envWithDefaultBool("ENABLE_LOGIN_ALERTS", true)
-	enableMFAAlerts       bool   = envWithDefaultBool("ENABLE_MFA_ALERTS", true)
+	elevatedRedirectPages          = []string{"removemfa", "changeemail", "deleteaccount", "changeusername"}
+	sevMap                         = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
+	gatehouseVersion      string   = "%VERSION%"
+	allowRegistration     bool     = envWithDefaultBool("ALLOW_REGISTRATION", true)
+	allowUsernameLogin    bool     = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
+	allowPasswordReset    bool     = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
+	allowMobileMFA        bool     = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
+	allowUsernameChange   bool     = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
+	allowEmailChange      bool     = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
+	allowDeleteAccount    bool     = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
+	allowSessionRevoke    bool     = envWithDefaultBool("ALLOW_SESSION_REVOKE", true)
+	enableLoginAlerts     bool     = envWithDefaultBool("ENABLE_LOGIN_ALERTS", true)
+	enableMFAAlerts       bool     = envWithDefaultBool("ENABLE_MFA_ALERTS", true)
 	publicPages           string   = envWithDefault("PUBLIC_PAGES", "")
 	publicPageList        []string = strings.Split(publicPages, ",")
 )
@@ -265,5 +265,36 @@ func InitDatabase(n int) {
 			log(0, fmt.Sprintf("Failed to create required table: %s", err.Error()))
 			os.Exit(1)
 		}
+	}
+}
+
+func ServePage(response http.ResponseWriter, pageStruct GatehouseForm) {
+	err := formTemplate.Execute(response, confirmEmailPage)
+	if err != nil {
+		log(1, fmt.Sprintf("Error rendering page: %s", err.Error()))
+		ServeErrorPage(response)
+	}
+}
+
+func ServeErrorPage(response http.ResponseWriter) {
+	var errorPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Error Occurred",
+		"Error Occurred",
+		"",
+		"",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint(fmt.Sprintf("We're currently experiencing issues. Please try again later.")),
+			FormCreateButtonLink("/", "Back to site"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+	response.WriteHeader(500)
+	err := formTemplate.Execute(response, errorPage)
+	if err != nil {
+		log(1, fmt.Sprintf("Error rendering error page: %s", err.Error()))
+		fmt.Fprint(response, `Internal Error.`)
 	}
 }
