@@ -1122,6 +1122,7 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 		validCriticalSession bool = false
 		userID               string
 		username             string
+		email                string
 	)
 
 	username = strings.ToLower(request.FormValue("newUsername"))
@@ -1152,7 +1153,7 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 		}
 		defer db.Close()
 
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID)
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &email)
 		if err != nil && err != sql.ErrNoRows {
 			panic(err)
 		} else if err == sql.ErrNoRows {
@@ -1169,6 +1170,7 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 			if err != nil {
 				panic(err)
 			}
+			sendMail(email, "Username Changed", username, "Your username has been changed successfully. You will be able to change your username again after 30 days.", "", "If you did not perform this action, please change your password immediately.")
 		}
 	}
 }
