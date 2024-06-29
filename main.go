@@ -49,6 +49,7 @@ var (
 	dashTemplate          *template.Template
 	functionalURIs        map[string]map[string]interface{}
 	proxy                 *httputil.ReverseProxy
+	db                    *sql.DB
 	elevatedRedirectPages          = []string{"removemfa", "changeemail", "deleteaccount", "changeusername"}
 	sevMap                         = [6]string{"FATAL", "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 	gatehouseVersion      string   = "%VERSION%"
@@ -76,6 +77,7 @@ func main() {
 	fmt.Println("                                                  ")
 	fmt.Println("Version " + gatehouseVersion)
 	InitDatabase(10)
+	defer db.Close()
 	LoadTemplates()
 	LoadFuncionalURIs()
 
@@ -216,7 +218,8 @@ func LoadFuncionalURIs() {
 }
 
 func InitDatabase(n int) {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/", mysqlUser, mysqlPassword, mysqlHost, mysqlPort))
+	var err error
+	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/", mysqlUser, mysqlPassword, mysqlHost, mysqlPort))
 	if err != nil {
 		logMessage(0, fmt.Sprintf("Failed to connect to create database connection: %s", err.Error()))
 		os.Exit(1)
@@ -229,12 +232,19 @@ func InitDatabase(n int) {
 			time.Sleep(5 * time.Second)
 			InitDatabase(n - 1)
 		} else {
+			db.Close()
 			logMessage(0, "Failed to connect to database. Exiting...")
 			os.Exit(1)
 		}
 	} else {
-		logMessage(4, "Creating database tables")
 		db.Close()
+		db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			logMessage(0, "Failed to open newly created database. Exiting...")
+			os.Exit(1)
+		}
+		logMessage(4, "Creating database tables")
+		db.SetConnMaxIdleTime(10 * time.Second)
 
 		CreateDatabaseTable(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NOT NULL DEFAULT '',`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar_url` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0, `mfa_type` VARCHAR(8) NOT NULL DEFAULT 'email', `mfa_secret` VARCHAR(16) NULL, `username_changed` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 
@@ -247,19 +257,11 @@ func InitDatabase(n int) {
 		CreateDatabaseTable(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_mfa` (`mfa_session` VARCHAR(32) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `type` VARCHAR(8) NOT NULL, `token` VARCHAR(6) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`mfa_session`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 
 		CreateDatabaseTable(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_recovery` (`user_id` VARCHAR(8) NOT NULL, `code` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`user_id`, `code`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
-
 	}
 }
 
 func CreateDatabaseTable(tableSql string) {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/", mysqlUser, mysqlPassword, mysqlHost, mysqlPort))
-	if err != nil {
-		logMessage(0, fmt.Sprintf("Failed to connect to create database connection: %s", err.Error()))
-		os.Exit(1)
-	}
-	defer db.Close()
-
-	_, err = db.Exec(tableSql)
+	_, err := db.Exec(tableSql)
 	if err != nil {
 		logMessage(0, fmt.Sprintf("Failed to create required table: %s", err.Error()))
 		os.Exit(1)
@@ -267,7 +269,7 @@ func CreateDatabaseTable(tableSql string) {
 }
 
 func ServePage(response http.ResponseWriter, pageStruct GatehouseForm) {
-	err := formTemplate.Execute(response, confirmEmailPage)
+	err := formTemplate.Execute(response, pageStruct)
 	if err != nil {
 		logMessage(1, fmt.Sprintf("Error rendering page: %s", err.Error()))
 		ServeErrorPage(response)
@@ -282,7 +284,7 @@ func ServeErrorPage(response http.ResponseWriter) {
 		"",
 		[]GatehouseFormElement{
 			FormCreateDivider(),
-			FormCreateHint(fmt.Sprintf("We're currently experiencing issues. Please try again later.")),
+			FormCreateHint("We're currently experiencing issues. Please try again later."),
 			FormCreateButtonLink("/", "Back to site"),
 			FormCreateDivider(),
 		},

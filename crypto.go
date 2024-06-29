@@ -116,14 +116,8 @@ func GenerateOTPSecret() string {
 func GenerateUserID() string {
 	newID := GenerateRandomString(8)
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
 	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE id = ?", tablePrefix), strings.ToLower(newID)).Scan(&userID)
+	err := db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE id = ?", tablePrefix), strings.ToLower(newID)).Scan(&userID)
 	if err == sql.ErrNoRows {
 		return newID
 	} else if err != nil {
@@ -135,13 +129,8 @@ func GenerateUserID() string {
 
 func GenerateSessionToken() string {
 	newToken := GenerateRandomString(64)
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
 	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions WHERE session_token = ?", tablePrefix), newToken).Scan(&userID)
+	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions WHERE session_token = ?", tablePrefix), newToken).Scan(&userID)
 	if err == sql.ErrNoRows {
 		return newToken
 	} else if err != nil {
@@ -154,14 +143,8 @@ func GenerateSessionToken() string {
 func GenerateResetToken() string {
 	newToken := GenerateRandomString(32)
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
 	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ?", tablePrefix), newToken).Scan(&userID)
+	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ?", tablePrefix), newToken).Scan(&userID)
 	if err == sql.ErrNoRows {
 		return newToken
 	} else if err != nil {
@@ -174,14 +157,8 @@ func GenerateResetToken() string {
 func GenerateMfaSessionToken() string {
 	newToken := GenerateRandomString(32)
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
 	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ?", tablePrefix), newToken).Scan(&userID)
+	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ?", tablePrefix), newToken).Scan(&userID)
 	if err == sql.ErrNoRows {
 		return newToken
 	} else if err != nil {
@@ -194,14 +171,8 @@ func GenerateMfaSessionToken() string {
 func GenerateEmailConfirmationToken() string {
 	newToken := GenerateRandomString(32)
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
 	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_confirmations WHERE confirmation_token = ?", tablePrefix), newToken).Scan(&userID)
+	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_confirmations WHERE confirmation_token = ?", tablePrefix), newToken).Scan(&userID)
 	if err == sql.ErrNoRows {
 		return strings.ToLower(newToken)
 	} else if err != nil {

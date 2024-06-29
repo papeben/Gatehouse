@@ -15,16 +15,9 @@ import (
 
 func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, userID string) {
 	token := GenerateSessionToken()
-
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
 	logMessage(4, fmt.Sprintf("User %s (%s) authenticated", userID, request.RemoteAddr))
 
-	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userID)
+	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userID)
 	if err != nil {
 		panic(err)
 	}
@@ -42,7 +35,7 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 		if err != nil {
 			panic(err)
 		} else {
-			err = sendMail(email, "Sign In - New Device", username, fmt.Sprintf("A new device has signed in to your account.<br><br>If this was you, there's nothing you need to do. Otherwise, please change your password immediately."), "", "")
+			err = sendMail(email, "Sign In - New Device", username, "A new device has signed in to your account.<br><br>If this was you, there's nothing you need to do. Otherwise, please change your password immediately.", "", "")
 			if err != nil {
 				logMessage(3, fmt.Sprintf("User %s was not notified of new device sign in.", username))
 			}
@@ -52,15 +45,9 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 }
 
 func IsValidSession(sessionToken string) bool {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
 	var userId string
 
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userId)
+	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userId)
 	if err != nil && err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
@@ -71,18 +58,12 @@ func IsValidSession(sessionToken string) bool {
 }
 
 func IsValidSessionWithInfo(sessionToken string) (bool, string, string, bool) {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
 	var (
 		userID         string
 		userEmail      string
 		emailConfirmed bool
 	)
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, email_confirmed FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID, &userEmail, &emailConfirmed)
+	err := db.QueryRow(fmt.Sprintf("SELECT user_id, email, email_confirmed FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID, &userEmail, &emailConfirmed)
 	if err != nil && err == sql.ErrNoRows {
 		return false, "", "", false
 	} else if err != nil {
@@ -93,14 +74,8 @@ func IsValidSessionWithInfo(sessionToken string) (bool, string, string, bool) {
 }
 
 func IsValidCriticalSession(sessionToken string) bool {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
 	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 1 AND created > NOW() - INTERVAL 1 HOUR", tablePrefix, tablePrefix), sessionToken).Scan(&userID)
+	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 1 AND created > NOW() - INTERVAL 1 HOUR", tablePrefix, tablePrefix), sessionToken).Scan(&userID)
 	if err != nil && err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
@@ -111,14 +86,8 @@ func IsValidCriticalSession(sessionToken string) bool {
 }
 
 func PendingEmailApproval(sessionToken string) bool {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
 	var emailConfirmed bool
-	err = db.QueryRow(fmt.Sprintf("SELECT email_confirmed FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionToken).Scan(&emailConfirmed)
+	err := db.QueryRow(fmt.Sprintf("SELECT email_confirmed FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionToken).Scan(&emailConfirmed)
 	if err != nil && err != sql.ErrNoRows {
 		panic(err)
 	} else if err == sql.ErrNoRows || emailConfirmed {
@@ -129,13 +98,8 @@ func PendingEmailApproval(sessionToken string) bool {
 }
 
 func ConfirmEmailCode(code string) bool {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
 	var isTokenUsed bool
-	err = db.QueryRow(fmt.Sprintf("SELECT used FROM %s_confirmations WHERE confirmation_token = ?", tablePrefix), code).Scan(&isTokenUsed)
+	err := db.QueryRow(fmt.Sprintf("SELECT used FROM %s_confirmations WHERE confirmation_token = ?", tablePrefix), code).Scan(&isTokenUsed)
 	if err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
@@ -153,12 +117,7 @@ func ConfirmEmailCode(code string) bool {
 
 func SendEmailConfirmationCode(userID string, email string, username string) {
 	code := GenerateEmailConfirmationToken()
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_confirmations (confirmation_token, user_id) VALUES (?, ?)", tablePrefix), code, userID)
+	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_confirmations (confirmation_token, user_id) VALUES (?, ?)", tablePrefix), code, userID)
 	if err != nil {
 		panic(err)
 	}
@@ -179,6 +138,7 @@ func sendMail(to string, subject string, recipient string, message string, link 
 		hasCloser bool = false
 		content   []byte
 		data      io.WriteCloser
+		conn      *tls.Conn
 	)
 
 	// Create a custom tls.Config with InsecureSkipVerify set to true
@@ -187,7 +147,7 @@ func sendMail(to string, subject string, recipient string, message string, link 
 			InsecureSkipVerify: smtpTLSSkipVerify, /* #nosec G402 */
 			ServerName:         smtpHost,
 		}
-		conn, err := tls.Dial("tcp", smtpHost+":"+smtpPort, tlsConfig)
+		conn, err = tls.Dial("tcp", smtpHost+":"+smtpPort, tlsConfig)
 		if err == nil {
 			client, err = smtp.NewClient(conn, smtpHost)
 		}
@@ -273,15 +233,10 @@ func sendMail(to string, subject string, recipient string, message string, link 
 }
 
 func ResetPasswordRequest(email string) bool {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
 
 	var userID string
 	var username string
-	err = db.QueryRow(fmt.Sprintf("SELECT id, username FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID, &username)
+	err := db.QueryRow(fmt.Sprintf("SELECT id, username FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID, &username)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return false
@@ -305,14 +260,8 @@ func ResetPasswordRequest(email string) bool {
 }
 
 func IsValidResetCode(code string) bool {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
 	var userID string
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ? AND used = 0", tablePrefix), code).Scan(&userID)
+	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ? AND used = 0", tablePrefix), code).Scan(&userID)
 	if err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
@@ -323,16 +272,10 @@ func IsValidResetCode(code string) bool {
 }
 
 func ResendConfirmationEmail(sessionToken string) bool {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
 	var userID string
 	var username string
 	var email string
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND email_resent = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID, &email, &username)
+	err := db.QueryRow(fmt.Sprintf("SELECT user_id, email, username FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND email_resent = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID, &email, &username)
 	if err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
@@ -352,14 +295,8 @@ func IsValidNewUsername(username string) bool {
 	if !match {
 		return false
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		var userID string
-		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID)
+		err := db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID)
 		if err == sql.ErrNoRows {
 			return true
 		} else if err != nil {
@@ -375,14 +312,8 @@ func IsValidNewEmail(email string) bool {
 	if !match {
 		return false
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		var userID string
-		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID)
+		err := db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID)
 		if err == sql.ErrNoRows {
 			return true
 		} else if err != nil {

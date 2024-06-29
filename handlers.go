@@ -157,20 +157,14 @@ func HandleRecoveryCode(response http.ResponseWriter, request *http.Request) {
 	if err != nil {
 		http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ? AND used = 0 AND type = 'totp'", tablePrefix), mfaCookie.Value).Scan(&userID)
+		if err == sql.ErrNoRows {
+			http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+		} else if err != nil {
+			logMessage(1, fmt.Sprintf("Error connecting to database: %s", err.Error()))
 			ServeErrorPage(response)
 		} else {
-			defer db.Close()
-			err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ? AND used = 0 AND type = 'totp'", tablePrefix), mfaCookie.Value).Scan(&userID)
-			if err == sql.ErrNoRows {
-				http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
-			} else if err != nil {
-				logMessage(1, fmt.Sprintf("Error connecting to database: %s", err.Error()))
-				ServeErrorPage(response)
-			} else {
-				ServePage(response, mfaRecoveryCodePage)
-			}
+			ServePage(response, mfaRecoveryCodePage)
 		}
 	}
 }
@@ -245,12 +239,6 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		var (
 			userID          string
 			username        string
@@ -373,12 +361,6 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 	if !validSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		var (
 			userID         string = ""
 			email          string = ""
@@ -516,12 +498,6 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 	} else if !validCriticalSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeusername"), http.StatusSeeOther)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userId)
 		if err == sql.ErrNoRows {
 			ServePage(response, usernameChangeBlockedPage)
@@ -621,13 +597,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid login details.`)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
-		err = db.QueryRow(fmt.Sprintf("SELECT id, email, email_confirmed, password, mfa_type FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID, &email, &emailConfirmed, &passwordHash, &mfaType)
+		err := db.QueryRow(fmt.Sprintf("SELECT id, email, email_confirmed, password, mfa_type FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID, &email, &emailConfirmed, &passwordHash, &mfaType)
 		if err == sql.ErrNoRows {
 			http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
 		} else if err != nil {
@@ -691,13 +661,8 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Passwords did not match.`)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
 		userID := GenerateUserID()
-		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userID, username, email, HashPassword(password))
+		_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userID, username, email, HashPassword(password))
 		if err != nil {
 			panic(err)
 		}
@@ -724,14 +689,8 @@ func HandleSubReset(response http.ResponseWriter, request *http.Request) {
 	passwordConfirm := request.FormValue("passwordConfirm")
 
 	if code != "" && IsValidPassword(password) && password == passwordConfirm {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		var userID string
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ? AND used = 0", tablePrefix), code).Scan(&userID)
+		err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ? AND used = 0", tablePrefix), code).Scan(&userID)
 		if err == sql.ErrNoRows {
 			response.WriteHeader(403)
 			fmt.Fprint(response, `403 - Unauthorized.`)
@@ -764,13 +723,7 @@ func HandleSubOTP(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `Invalid request.`)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id, token, mfa_type, mfa_secret FROM %s_mfa INNER JOIN %s_accounts ON user_id = id WHERE mfa_session = ? AND created > CURRENT_TIMESTAMP - INTERVAL 1 HOUR AND used = 0", tablePrefix, tablePrefix), mfaSession.Value).Scan(&userID, &mfaStoredToken, &mfaType, &mfaSecret)
+		err := db.QueryRow(fmt.Sprintf("SELECT user_id, token, mfa_type, mfa_secret FROM %s_mfa INNER JOIN %s_accounts ON user_id = id WHERE mfa_session = ? AND created > CURRENT_TIMESTAMP - INTERVAL 1 HOUR AND used = 0", tablePrefix, tablePrefix), mfaSession.Value).Scan(&userID, &mfaStoredToken, &mfaType, &mfaSecret)
 		if err != nil && err != sql.ErrNoRows {
 			panic(err)
 		} else if err == sql.ErrNoRows {
@@ -816,12 +769,6 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		err = db.QueryRow(fmt.Sprintf("SELECT id, mfa_secret, email, username FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND mfa_type = 'email' AND mfa_secret IS NOT NULL", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &mfaSecret, &email, &username)
 		if err == sql.ErrNoRows {
 			response.WriteHeader(400)
@@ -908,12 +855,6 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Invalid target.")
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		err = db.QueryRow(fmt.Sprintf("SELECT id, password FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &passwordHash)
 		if err != nil {
 			panic(err)
@@ -961,12 +902,6 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 	} else if !validCriticalSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=removemfa"), http.StatusSeeOther)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		err = db.QueryRow(fmt.Sprintf("SELECT id, mfa_type FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&sessionUserID, &mfaType)
 		if err != nil {
 			panic(err)
@@ -1029,12 +964,6 @@ func HandleSubEmailChange(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid email.`)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		err = db.QueryRow(fmt.Sprintf("SELECT user_id, username FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &username)
 		if err != nil && err != sql.ErrNoRows {
 			panic(err)
@@ -1084,12 +1013,6 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid username.`)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &email)
 		if err != nil && err != sql.ErrNoRows {
 			panic(err)
@@ -1136,12 +1059,6 @@ func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request)
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		err = db.QueryRow(fmt.Sprintf("SELECT user_id, username FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &username)
 		if err != nil && err != sql.ErrNoRows {
 			panic(err)
@@ -1168,12 +1085,6 @@ func HandleSubRecoveryCode(response http.ResponseWriter, request *http.Request) 
 	if err != nil {
 		http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_mfa INNER JOIN %s_recovery ON %s_mfa.user_id = %s_recovery.user_id INNER JOIN %s_accounts ON id = %s_recovery.user_id WHERE mfa_session = ? AND %s_mfa.used = 0 AND type = 'totp' AND %s_mfa.created > CURRENT_TIMESTAMP - INTERVAL 1 HOUR AND code = ?", tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix, tablePrefix), mfaCookie.Value, recoveryToken).Scan(&userID)
 		if err == sql.ErrNoRows {
 			http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
@@ -1207,12 +1118,6 @@ func HandleSubSessionRevoke(response http.ResponseWriter, request *http.Request)
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 	} else {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-		if err != nil {
-			panic(err)
-		}
-		defer db.Close()
-
 		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID)
 		if err != nil && err != sql.ErrNoRows {
 			panic(err)
