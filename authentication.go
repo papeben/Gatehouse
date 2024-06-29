@@ -70,7 +70,7 @@ func IsValidSession(sessionToken string) bool {
 	}
 }
 
-func IsValidSessionWithInfo(sessionToken string) (bool, string, string) {
+func IsValidSessionWithInfo(sessionToken string) (bool, string, string, bool) {
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 	if err != nil {
 		panic(err)
@@ -78,16 +78,17 @@ func IsValidSessionWithInfo(sessionToken string) (bool, string, string) {
 	defer db.Close()
 
 	var (
-		userID    string
-		userEmail string
+		userID         string
+		userEmail      string
+		emailConfirmed bool
 	)
-	err = db.QueryRow(fmt.Sprintf("SELECT user_id, email FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID, &userEmail)
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, email_confirmed FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID, &userEmail, &emailConfirmed)
 	if err != nil && err == sql.ErrNoRows {
-		return false, "", ""
+		return false, "", "", false
 	} else if err != nil {
 		panic(err)
 	} else {
-		return true, userID, userEmail
+		return true, userID, userEmail, emailConfirmed
 	}
 }
 

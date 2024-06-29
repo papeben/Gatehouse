@@ -14,16 +14,18 @@ import (
 func HandleMain(response http.ResponseWriter, request *http.Request) { // Create main listener function
 
 	var (
-		validSession bool   = false
-		userId       string = "Unauth"
-		userEmail    string = "-"
+		validSession   bool   = false
+		userId         string = "Unauth"
+		userEmail      string = "-"
+		emailConfirmed bool   = false
+		proxied        string = "Proxied"
 	)
 
 	handler := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load handler associated with URI from functionalURIs map
 	tokenCookie, tokenError := request.Cookie(sessionCookieName)
 
 	if tokenError == nil {
-		validSession, userId, userEmail = IsValidSessionWithInfo(tokenCookie.Value)
+		validSession, userId, userEmail, emailConfirmed = IsValidSessionWithInfo(tokenCookie.Value)
 		if !validSession {
 			log(3, fmt.Sprintf("Client %s presented an invalid session token", request.RemoteAddr))
 			http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
@@ -31,15 +33,35 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 	}
 	if handler != nil {
 		handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
-	} else if !validSession && requireAuthentication {
-		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
-	} else if requireEmailConfirm && validSession && PendingEmailApproval(tokenCookie.Value) {
+		proxied = "Served"
+	} else if requireEmailConfirm && validSession && !emailConfirmed {
 		http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
-	} else {
+		proxied = "Redirected"
+	} else if !requireAuthentication {
 		proxy.ServeHTTP(response, request)
+	} else if validSession && emailConfirmed {
+		proxy.ServeHTTP(response, request)
+	} else if sliceContainsPath(publicPageList, request.URL.Path) {
+		proxy.ServeHTTP(response, request)
+	} else if request.URL.Path == "/" && sliceContainsPath(publicPageList, "//") {
+		proxy.ServeHTTP(response, request)
+	} else {
+		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
+		proxied = "Redirected"
 	}
 
-	log(4, fmt.Sprintf("%s(%s) (%s) %s %d %s %s", userId, userEmail, request.RemoteAddr, request.Proto, request.ContentLength, request.Method, request.RequestURI))
+	log(4, fmt.Sprintf("%s(%s) (%s) %s %s %d %s %s", userId, userEmail, request.RemoteAddr, proxied, request.Proto, request.ContentLength, request.Method, request.RequestURI))
+}
+
+func sliceContainsPath(slice []string, path string) bool {
+	for _, val := range slice {
+		if val == path {
+			return true
+		} else if len(val) > 2 && string(val[len(val)-1]) == "/" && len(path) > len(val) && path[0:len(val)] == val {
+			return true
+		}
+	}
+	return false
 }
 
 func HandleLogin(response http.ResponseWriter, request *http.Request) {
