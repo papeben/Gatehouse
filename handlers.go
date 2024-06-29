@@ -114,7 +114,7 @@ func HandleLogout(response http.ResponseWriter, request *http.Request) {
 		innerform = append(innerform, FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"))
 	}
 
-	var logoutPage = GatehouseForm{ // Define login page
+	var logoutPage = GatehouseForm{
 		appName + " - Sign Out",
 		"Goodbye",
 		"",
@@ -1274,6 +1274,67 @@ func HandleSubRecoveryCode(response http.ResponseWriter, request *http.Request) 
 				panic(err)
 			}
 			AuthenticateRequestor(response, request, userID)
+		}
+	}
+}
+
+func HandleSubSessionRevoke(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession bool = false
+		userID       string
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	if !allowSessionRevoke {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Feature Disabled.`)
+	} else if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID)
+		if err != nil && err != sql.ErrNoRows {
+			panic(err)
+		} else if err == sql.ErrNoRows {
+			response.WriteHeader(400)
+			fmt.Fprint(response, `Invalid request.`)
+		} else {
+			_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_sessions WHERE user_id = ?", tablePrefix), userID)
+			if err != nil {
+				panic(err)
+			} else {
+				var logoutPage = GatehouseForm{
+					appName + " - Sign Out",
+					"Signed Out All Devices",
+					"",
+					"",
+					[]GatehouseFormElement{
+						FormCreateDivider(),
+						FormCreateHint("You have signed out all devices."),
+						FormCreateButtonLink("/", "Back to site"),
+						FormCreateDivider(),
+						FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
+					},
+					[]OIDCButton{},
+					functionalPath,
+				}
+
+				http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
+				err := formTemplate.Execute(response, logoutPage)
+				if err != nil {
+					panic(err)
+				}
+			}
 		}
 	}
 }

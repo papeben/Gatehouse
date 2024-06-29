@@ -206,6 +206,7 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/submit/changeusername": HandleSubUsernameChange,
 			"/" + functionalPath + "/submit/deleteaccount":  HandleSubDeleteAccount,
 			"/" + functionalPath + "/submit/recoverycode":   HandleSubRecoveryCode,
+			"/" + functionalPath + "/submit/revokesessions": HandleSubSessionRevoke,
 		},
 	}
 }
