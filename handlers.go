@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
@@ -136,7 +135,7 @@ func HandleLogout(response http.ResponseWriter, request *http.Request) {
 		innerform = append(innerform, FormCreateButtonLink("/"+functionalPath+"/register", "Create an Account"))
 	}
 
-	var logoutPage = GatehouseForm{ // Define login page
+	var logoutPage = GatehouseForm{
 		appName + " - Sign Out",
 		"Goodbye",
 		"",
@@ -443,6 +442,15 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 			panic(err)
 		}
 
+		// Account info options
+		if allowEmailChange || allowUsernameChange {
+			dashButtons = append(
+				dashButtons,
+				FormCreateDivider(),
+				FormCreateHint("Account Details"),
+			)
+		}
+
 		if email == "" && allowEmailChange {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Add Email Address"))
 		} else if allowEmailChange {
@@ -451,6 +459,16 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 
 		if allowUsernameChange {
 			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
+		}
+
+		// Security options
+
+		if allowMobileMFA || allowSessionRevoke {
+			dashButtons = append(
+				dashButtons,
+				FormCreateDivider(),
+				FormCreateHint("Account Security"),
+			)
 		}
 
 		if mfaType == "email" && allowMobileMFA {
@@ -462,12 +480,19 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 		dashButtons = append(
 			dashButtons,
 			FormCreateButtonLink(path.Join("/", functionalPath, "logout"), "Sign Out"),
-			FormCreateDivider(),
 		)
+
+		if allowSessionRevoke {
+			dashButtons = append(
+				dashButtons,
+				FormCreateButtonLink(path.Join("/", functionalPath, "revokesessions"), "Sign Out All Devices"),
+			)
+		}
 
 		if allowDeleteAccount {
 			dashButtons = append(
 				dashButtons,
+				FormCreateDivider(),
 				FormCreateHint("Danger Area"),
 				FormCreateDangerButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
 			)
@@ -609,6 +634,51 @@ func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func HandleSessionRevoke(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	if !allowSessionRevoke {
+		err := formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else {
+		var deleteAccountPage = GatehouseForm{
+			appName + " - Sign Out All Devices",
+			"Sign Out All Devices",
+			"/" + functionalPath + "/submit/revokesessions",
+			"POST",
+			[]GatehouseFormElement{
+				FormCreateDivider(),
+				FormCreateHint("Are you sure you wish to sign out all devices?"),
+				FormCreateDivider(),
+				FormCreateDangerSubmitInput("submit", "Sign Out"),
+				FormCreateDivider(),
+				FormCreateHint("Changed your mind?"),
+				FormCreateButtonLink("/"+functionalPath+"/manage", "Cancel"),
+				FormCreateDivider(),
+			},
+			[]OIDCButton{},
+			functionalPath,
+		}
+
+		err := formTemplate.Execute(response, deleteAccountPage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // Form Submissions
 
@@ -627,7 +697,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(response, `400 - Feature Disabled.`)
 	} else if username == "" || password == "" {
 		response.WriteHeader(400)
-		fmt.Fprint(response, `400 - Invalid registration details.`)
+		fmt.Fprint(response, `400 - Invalid login details.`)
 	} else {
 		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 		if err != nil {
@@ -654,37 +724,18 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 				if err != nil {
 					panic(err)
 				}
-				var body bytes.Buffer
-				err = emailTemplate.Execute(&body, struct {
-					Title    string
-					Username string
-					Message  string
-					HasLink  bool
-					Link     string
-					AppName  string
-				}{
-					Title:    "OTP Token",
-					Username: username,
-					Message:  fmt.Sprintf("Your OTP code for %s is: %s", appName, mfaToken),
-					HasLink:  false,
-					Link:     "",
-					AppName:  appName,
-				})
+
+				err = sendMail(strings.ToLower(email), "Sign In - OTP", username, fmt.Sprintf("Your OTP code for %s is: %s", appName, mfaToken), "", "<b>If you did not request this action, please change your password immediately.</b>")
+
 				if err != nil {
-					panic(err)
+					ReturnErrorPage(response, request)
+				} else {
+					err = formTemplate.Execute(response, mfaEmailPage)
+					if err != nil {
+						panic(err)
+					}
 				}
 
-				err = sendMail(strings.ToLower(email), "Sign In - OTP", body.String())
-				if err != nil {
-					fmt.Println(err)
-					fmt.Println("Error sending email to " + email + ". Placing MFA code below:")
-					fmt.Println(mfaToken)
-				}
-
-				err = formTemplate.Execute(response, mfaEmailPage)
-				if err != nil {
-					panic(err)
-				}
 			} else {
 				_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "totp", userID, "")
 				if err != nil {
@@ -843,6 +894,8 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 		submitOtp    string = request.FormValue("otp")
 		mfaSecret    string
 		userID       string
+		email        string
+		username     string
 		validSession bool = false
 	)
 	sessionCookie, err := request.Cookie(sessionCookieName)
@@ -865,7 +918,7 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 		}
 		defer db.Close()
 
-		err = db.QueryRow(fmt.Sprintf("SELECT id, mfa_secret FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND mfa_type = 'email' AND mfa_secret IS NOT NULL", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &mfaSecret)
+		err = db.QueryRow(fmt.Sprintf("SELECT id, mfa_secret, email, username FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND mfa_type = 'email' AND mfa_secret IS NOT NULL", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &mfaSecret, &email, &username)
 		if err == sql.ErrNoRows {
 			response.WriteHeader(400)
 			fmt.Fprint(response, `Invalid Request.`)
@@ -898,10 +951,12 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 					"GET",
 					[]GatehouseFormElement{
 						FormCreateDivider(),
-						FormCreateHint("Your OTP code was validated successfully! You are now able to sign in with your authenticator OTP in the future."),
+						FormCreateHint("Your MFA device was successfully registered. You are now able to sign in with your authenticator OTP in the future."),
 						FormCreateDivider(),
+						FormCreateHint("In the event you lose your MFA device, a recovery code can be used instead."),
 						FormCreateHint("Your recovery codes:"),
 						FormCreateHint(recoveryCodes),
+						FormCreateHint("Ensure these are recorded somewhere safe."),
 						FormCreateDivider(),
 						FormCreateButtonLink("/"+functionalPath+"/manage", "Back to Dashboard"),
 						FormCreateDivider(),
@@ -913,6 +968,12 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 				err = formTemplate.Execute(response, mfaValidatedPage)
 				if err != nil {
 					panic(err)
+				}
+				if enableMFAAlerts {
+					err = sendMail(email, "MFA Device Added", username, "You have successfully added an MFA device to your account.", "", "")
+					if err != nil {
+						log(3, fmt.Sprintf("User %s was not sent MFA added email.", userID))
+					}
 				}
 			} else {
 				response.WriteHeader(400)
@@ -980,6 +1041,8 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 		validSession         bool = false
 		validCriticalSession bool = false
 		mfaType              string
+		username             string
+		email                string
 		sessionUserID        string
 		criticalUserID       string
 	)
@@ -1010,7 +1073,7 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 		if err != nil {
 			panic(err)
 		}
-		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND critical = 1", tablePrefix, tablePrefix), critialSessionCookie.Value).Scan(&criticalUserID)
+		err = db.QueryRow(fmt.Sprintf("SELECT id, email, username FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND critical = 1", tablePrefix, tablePrefix), critialSessionCookie.Value).Scan(&criticalUserID, &email, &username)
 		if err != nil {
 			panic(err)
 		}
@@ -1029,6 +1092,12 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 			err = formTemplate.Execute(response, mfaRemovedPage)
 			if err != nil {
 				panic(err)
+			}
+			if enableMFAAlerts {
+				err = sendMail(email, "MFA Device Removed", username, "You have successfully removed an MFA device to your account.", "", "If you did not request this action, change your password immediately.")
+				if err != nil {
+					log(3, fmt.Sprintf("User %s was not sent MFA removed email.", sessionUserID))
+				}
 			}
 		}
 	}
@@ -1098,6 +1167,7 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 		validCriticalSession bool = false
 		userID               string
 		username             string
+		email                string
 	)
 
 	username = strings.ToLower(request.FormValue("newUsername"))
@@ -1128,7 +1198,7 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 		}
 		defer db.Close()
 
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID)
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &email)
 		if err != nil && err != sql.ErrNoRows {
 			panic(err)
 		} else if err == sql.ErrNoRows {
@@ -1144,6 +1214,10 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 			err = formTemplate.Execute(response, confirmedUsernameChangePage)
 			if err != nil {
 				panic(err)
+			}
+			err = sendMail(email, "Username Changed", username, "Your username has been changed successfully. You will be able to change your username again after 30 days.", "", "If you did not perform this action, please change your password immediately.")
+			if err != nil {
+				log(3, fmt.Sprintf("User %s was not notified of username change.", username))
 			}
 		}
 	}
@@ -1225,6 +1299,67 @@ func HandleSubRecoveryCode(response http.ResponseWriter, request *http.Request) 
 				panic(err)
 			}
 			AuthenticateRequestor(response, request, userID)
+		}
+	}
+}
+
+func HandleSubSessionRevoke(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession bool = false
+		userID       string
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	if !allowSessionRevoke {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Feature Disabled.`)
+	} else if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else {
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID)
+		if err != nil && err != sql.ErrNoRows {
+			panic(err)
+		} else if err == sql.ErrNoRows {
+			response.WriteHeader(400)
+			fmt.Fprint(response, `Invalid request.`)
+		} else {
+			_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_sessions WHERE user_id = ?", tablePrefix), userID)
+			if err != nil {
+				panic(err)
+			} else {
+				var logoutPage = GatehouseForm{
+					appName + " - Sign Out",
+					"Signed Out All Devices",
+					"",
+					"",
+					[]GatehouseFormElement{
+						FormCreateDivider(),
+						FormCreateHint("You have signed out all devices."),
+						FormCreateButtonLink("/", "Back to site"),
+						FormCreateDivider(),
+						FormCreateButtonLink("/"+functionalPath+"/login", "Sign In"),
+					},
+					[]OIDCButton{},
+					functionalPath,
+				}
+
+				http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
+				err := formTemplate.Execute(response, logoutPage)
+				if err != nil {
+					panic(err)
+				}
+			}
 		}
 	}
 }
