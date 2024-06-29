@@ -228,16 +228,21 @@ func InitDatabase(n int) {
 	if err != nil {
 		if n > 1 {
 			logMessage(2, "Failed to connect to database! Trying again in 5 seconds...")
-			db.Close()
+			err = db.Close()
+			if err != nil {
+				logMessage(4, fmt.Sprintf("Error closing connection: %s"+err.Error()))
+			}
 			time.Sleep(5 * time.Second)
 			InitDatabase(n - 1)
 		} else {
-			db.Close()
 			logMessage(0, "Failed to connect to database. Exiting...")
 			os.Exit(1)
 		}
 	} else {
-		db.Close()
+		err = db.Close()
+		if err != nil {
+			logMessage(4, fmt.Sprintf("Error closing connection: %s"+err.Error()))
+		}
 		db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 		if err != nil {
 			logMessage(0, "Failed to open newly created database. Exiting...")
