@@ -613,6 +613,51 @@ func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func HandleSessionRevoke(response http.ResponseWriter, request *http.Request) {
+	var (
+		validSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession = IsValidSession(sessionCookie.Value)
+	}
+
+	if !allowSessionRevoke {
+		err := formTemplate.Execute(response, disabledFeaturePage)
+		if err != nil {
+			panic(err)
+		}
+	} else if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+	} else {
+		var deleteAccountPage = GatehouseForm{
+			appName + " - Sign Out All Devices",
+			"Sign Out All Devices",
+			"/" + functionalPath + "/submit/revokesessions",
+			"POST",
+			[]GatehouseFormElement{
+				FormCreateDivider(),
+				FormCreateHint("Are you sure you wish to sign out all devices?"),
+				FormCreateDivider(),
+				FormCreateDangerSubmitInput("submit", "Sign Out"),
+				FormCreateDivider(),
+				FormCreateHint("Changed your mind?"),
+				FormCreateButtonLink("/"+functionalPath+"/manage", "Cancel"),
+				FormCreateDivider(),
+			},
+			[]OIDCButton{},
+			functionalPath,
+		}
+
+		err := formTemplate.Execute(response, deleteAccountPage)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // Form Submissions
 
