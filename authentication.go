@@ -19,7 +19,7 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 
 	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userID)
 	if err != nil {
-		logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+		logDbError(err)
 		ServeErrorPage(response)
 	} else {
 		cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
@@ -33,7 +33,7 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 			)
 			err = db.QueryRow(fmt.Sprintf("SELECT email, username FROM %s_accounts WHERE id = ?", tablePrefix), userID).Scan(&email, &username)
 			if err != nil {
-				logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+				logDbError(err)
 				ServeErrorPage(response)
 			} else {
 				err = sendMail(email, "Sign In - New Device", username, "A new device has signed in to your account.<br><br>If this was you, there's nothing you need to do. Otherwise, please change your password immediately.", "", "")
@@ -52,7 +52,7 @@ func IsValidSession(sessionToken string) bool {
 	if err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
-		logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+		logDbError(err)
 		return false
 	} else {
 		return true
@@ -69,7 +69,7 @@ func IsValidSessionWithInfo(sessionToken string) (bool, string, string, bool) {
 	if err == sql.ErrNoRows {
 		return false, "", "", false
 	} else if err != nil {
-		logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+		logDbError(err)
 		return false, "", "", false
 	} else {
 		return true, userID, userEmail, emailConfirmed
@@ -82,7 +82,7 @@ func IsValidCriticalSession(sessionToken string) bool {
 	if err != nil && err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
-		logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+		logDbError(err)
 		return false
 	} else {
 		return true
@@ -93,7 +93,7 @@ func PendingEmailApproval(sessionToken string) bool {
 	var emailConfirmed bool
 	err := db.QueryRow(fmt.Sprintf("SELECT email_confirmed FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionToken).Scan(&emailConfirmed)
 	if err != nil && err != sql.ErrNoRows {
-		logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+		logDbError(err)
 		return false
 	} else if err == sql.ErrNoRows || emailConfirmed {
 		return false
@@ -108,14 +108,14 @@ func ConfirmEmailCode(code string) bool {
 	if err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
-		logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+		logDbError(err)
 		return false
 	} else if isTokenUsed {
 		return false
 	} else {
 		_, err := db.Exec(fmt.Sprintf("UPDATE %s_accounts INNER JOIN %s_confirmations ON user_id = id SET email_confirmed = 1, used = 1 WHERE confirmation_token = ?", tablePrefix, tablePrefix), code)
 		if err != nil {
-			logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+			logDbError(err)
 			return false
 		}
 		return true
@@ -126,7 +126,7 @@ func SendEmailConfirmationCode(userID string, email string, username string) {
 	code := GenerateEmailConfirmationToken()
 	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_confirmations (confirmation_token, user_id) VALUES (?, ?)", tablePrefix), code, userID)
 	if err != nil {
-		logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+		logDbError(err)
 	} else {
 		// Email code
 		err = sendMail(email, "Confirm your Email Address", username, fmt.Sprintf("Thank you for signing up to %s! Please confirm your email by clicking the link below:", appName), fmt.Sprintf("%s/%s/confirmcode?c=%s", webDomain, functionalPath, code), "If you did not request this action, please ignore this email.")
@@ -248,14 +248,14 @@ func ResetPasswordRequest(email string) bool {
 	if err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
-		logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+		logDbError(err)
 		return false
 	} else {
 		// Reset password
 		resetCode := GenerateResetToken()
 		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_resets (user_id, reset_token) VALUES (?, ?)", tablePrefix), userID, resetCode)
 		if err != nil {
-			logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+			logDbError(err)
 		} else {
 			err = sendMail(strings.ToLower(email), "Password Reset Request", username, fmt.Sprintf("Click the link below to reset your %s password:", appName), fmt.Sprintf("%s/%s/resetpassword?c=%s", webDomain, functionalPath, resetCode), "If you did not request this action, please disregard this email.")
 		}
@@ -274,7 +274,7 @@ func IsValidResetCode(code string) bool {
 	if err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
-		logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+		logDbError(err)
 		return false
 	} else {
 		return true
@@ -289,13 +289,13 @@ func ResendConfirmationEmail(sessionToken string) bool {
 	if err == sql.ErrNoRows {
 		return false
 	} else if err != nil {
-		logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+		logDbError(err)
 		return false
 	} else {
 		SendEmailConfirmationCode(userID, email, username)
 		_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_resent = 1 WHERE id = ?", tablePrefix), userID)
 		if err != nil {
-			logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+			logDbError(err)
 			return false
 		}
 		return true
@@ -312,7 +312,7 @@ func IsValidNewUsername(username string) bool {
 		if err == sql.ErrNoRows {
 			return true
 		} else if err != nil {
-			logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+			logDbError(err)
 			return false
 		} else {
 			return false
@@ -330,7 +330,7 @@ func IsValidNewEmail(email string) bool {
 		if err == sql.ErrNoRows {
 			return true
 		} else if err != nil {
-			logMessage(2, fmt.Sprintf("Error executing database query: %s", err.Error()))
+			logDbError(err)
 			return false
 		} else {
 			return false
