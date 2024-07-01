@@ -227,74 +227,87 @@ func HandleIsUsernameTaken(response http.ResponseWriter, request *http.Request) 
 }
 
 func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
+	if !allowMobileMFA {
+		ServePage(response, disabledFeaturePage)
+		return
+	}
+
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	validSession := false
 	if err == nil {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
-
-	if !allowMobileMFA {
-		ServePage(response, disabledFeaturePage)
-	} else if !validSession {
+	if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
-	} else {
-		var (
-			userID          string
-			username        string
-			email           string
-			mfaType         string
-			mfaStoredSecret *string
-			mfaSecret       string
-			png             []byte
-		)
-
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username, mfa_type, mfa_secret FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &email, &username, &mfaType, &mfaStoredSecret)
-		if err != nil && err == sql.ErrNoRows {
-			response.WriteHeader(403)
-			fmt.Fprint(response, `Unauthorized.`)
-		} else if err != nil {
-			panic(err)
-		} else if mfaType == "token" {
-			response.WriteHeader(400)
-			fmt.Fprint(response, `Token MFA already configured.`)
-		} else {
-			if mfaStoredSecret == nil {
-				mfaSecret = GenerateOTPSecret()
-				_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_secret = ? WHERE id = ?", tablePrefix), mfaSecret, userID)
-				if err != nil {
-					panic(err)
-				}
-			} else {
-				mfaSecret = *mfaStoredSecret
-			}
-			otpUrl := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30", appName, email, mfaSecret, appName)
-			png, err = qrcode.Encode(otpUrl, qrcode.Medium, 256)
-			if err != nil {
-				panic(err)
-			}
-			png64 := base64.StdEncoding.EncodeToString(png)
-
-			var enrolPage GatehouseForm = GatehouseForm{ // Define forgot password page
-				appName + " - OTP Token",
-				"Setup Authenticator",
-				"/" + functionalPath + "/submit/validatemfa",
-				"POST",
-				[]GatehouseFormElement{
-					FormCreateDivider(),
-					FormCreateHint("To set up a OTP token, scan this QR code with a compatible authenticator app."),
-					FormCreateQR(png64),
-					FormCreateHint("Once added, enter the current code into the text box and confirm."),
-					FormCreateTextInput("otp", "123456"),
-					FormCreateSubmitInput("submit", "Confirm"),
-					FormCreateDivider(),
-				},
-				[]OIDCButton{},
-				functionalPath,
-			}
-			ServePage(response, enrolPage)
-		}
+		return
 	}
+
+	var (
+		userID          string
+		username        string
+		email           string
+		mfaType         string
+		mfaStoredSecret *string
+		mfaSecret       string
+		png             []byte
+	)
+
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username, mfa_type, mfa_secret FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &email, &username, &mfaType, &mfaStoredSecret)
+	if err == sql.ErrNoRows {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+		return
+	} else if err != nil {
+		ServeErrorPage(response)
+		logDbError(err)
+		return
+	} else if mfaType == "token" {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Token MFA already configured.`)
+		return
+	}
+
+	if mfaStoredSecret == nil {
+		mfaSecret = GenerateOTPSecret()
+		_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_secret = ? WHERE id = ?", tablePrefix), mfaSecret, userID)
+		if err != nil {
+			ServeErrorPage(response)
+			logDbError(err)
+			return
+		}
+	} else {
+		mfaSecret = *mfaStoredSecret
+	}
+
+	otpUrl := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30", appName, email, mfaSecret, appName)
+	png, err = qrcode.Encode(otpUrl, qrcode.Medium, 256)
+	if err != nil {
+		ServeErrorPage(response)
+		logMessage(1, fmt.Sprintf("Failed to encode QRCode: %s", otpUrl))
+		return
+	}
+	png64 := base64.StdEncoding.EncodeToString(png)
+
+	var enrolPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - OTP Token",
+		"Setup Authenticator",
+		"/" + functionalPath + "/submit/validatemfa",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("To set up a OTP token, scan this QR code with a compatible authenticator app."),
+			FormCreateQR(png64),
+			FormCreateHint("Once added, enter the current code into the text box and confirm."),
+			FormCreateTextInput("otp", "123456"),
+			FormCreateSubmitInput("submit", "Confirm"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+	ServePage(response, enrolPage)
+
 }
 
 func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
@@ -309,17 +322,22 @@ func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
 	if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
-	} else if target == "" {
+		return
+	}
+	if target == "" {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Target required.")
-	} else if !listContains(elevatedRedirectPages, target) {
+		return
+	}
+	if !listContains(elevatedRedirectPages, target) {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Invalid target.")
-	} else {
-		var editedPage GatehouseForm = elevateSessionPage
-		editedPage.FormAction = path.Join("/", functionalPath, fmt.Sprintf("/submit/elevate?t=%s", target))
-		ServePage(response, editedPage)
+		return
 	}
+
+	var editedPage GatehouseForm = elevateSessionPage
+	editedPage.FormAction = path.Join("/", functionalPath, fmt.Sprintf("/submit/elevate?t=%s", target))
+	ServePage(response, editedPage)
 }
 
 func HandleRemoveMFA(response http.ResponseWriter, request *http.Request) {
@@ -360,89 +378,97 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 
 	if !validSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
-	} else {
-		var (
-			userID         string = ""
-			email          string = ""
-			emailConfirmed bool   = false
-			mfaType        string = ""
-			dashButtons    []GatehouseFormElement
-		)
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, email_confirmed, mfa_type FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &email, &emailConfirmed, &mfaType)
-		if err != nil {
-			panic(err)
-		}
+		return
+	}
 
-		// Account info options
-		if allowEmailChange || allowUsernameChange {
-			dashButtons = append(
-				dashButtons,
-				FormCreateDivider(),
-				FormCreateHint("Account Details"),
-			)
-		}
+	var (
+		userID         string = ""
+		email          string = ""
+		emailConfirmed bool   = false
+		mfaType        string = ""
+		dashButtons    []GatehouseFormElement
+	)
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, email_confirmed, mfa_type FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &email, &emailConfirmed, &mfaType)
+	if err == sql.ErrNoRows {
+		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
+		return
+	} else if err != nil {
+		ServeErrorPage(response)
+		logDbError(err)
+		return
+	}
 
-		if email == "" && allowEmailChange {
-			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Add Email Address"))
-		} else if allowEmailChange {
-			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Change Email Address"))
-		}
-
-		if allowUsernameChange {
-			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
-		}
-
-		// Security options
-
-		if allowMobileMFA || allowSessionRevoke {
-			dashButtons = append(
-				dashButtons,
-				FormCreateDivider(),
-				FormCreateHint("Account Security"),
-			)
-		}
-
-		if mfaType == "email" && allowMobileMFA {
-			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "addmfa"), "Add MFA Device"))
-		} else if mfaType == "token" {
-			dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "removemfa"), "Remove MFA Device"))
-		}
-
+	// Account info options
+	if allowEmailChange || allowUsernameChange {
 		dashButtons = append(
 			dashButtons,
-			FormCreateButtonLink(path.Join("/", functionalPath, "logout"), "Sign Out"),
+			FormCreateDivider(),
+			FormCreateHint("Account Details"),
 		)
-
-		if allowSessionRevoke {
-			dashButtons = append(
-				dashButtons,
-				FormCreateButtonLink(path.Join("/", functionalPath, "revokesessions"), "Sign Out All Devices"),
-			)
-		}
-
-		if allowDeleteAccount {
-			dashButtons = append(
-				dashButtons,
-				FormCreateDivider(),
-				FormCreateHint("Danger Area"),
-				FormCreateDangerButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
-			)
-		}
-
-		var dashboardPage GatehouseForm = GatehouseForm{
-			appName + " - Manage Account",
-			"Manage Account",
-			"/",
-			"GET",
-			dashButtons,
-			[]OIDCButton{},
-			functionalPath,
-		}
-		err = dashTemplate.Execute(response, dashboardPage)
-		if err != nil {
-			panic(err)
-		}
 	}
+
+	if email == "" && allowEmailChange {
+		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Add Email Address"))
+	} else if allowEmailChange {
+		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeemail"), "Change Email Address"))
+	}
+
+	if allowUsernameChange {
+		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
+	}
+
+	// Security options
+
+	if allowMobileMFA || allowSessionRevoke {
+		dashButtons = append(
+			dashButtons,
+			FormCreateDivider(),
+			FormCreateHint("Account Security"),
+		)
+	}
+
+	if mfaType == "email" && allowMobileMFA {
+		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "addmfa"), "Add MFA Device"))
+	} else if mfaType == "token" {
+		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "removemfa"), "Remove MFA Device"))
+	}
+
+	dashButtons = append(
+		dashButtons,
+		FormCreateButtonLink(path.Join("/", functionalPath, "logout"), "Sign Out"),
+	)
+
+	if allowSessionRevoke {
+		dashButtons = append(
+			dashButtons,
+			FormCreateButtonLink(path.Join("/", functionalPath, "revokesessions"), "Sign Out All Devices"),
+		)
+	}
+
+	if allowDeleteAccount {
+		dashButtons = append(
+			dashButtons,
+			FormCreateDivider(),
+			FormCreateHint("Danger Area"),
+			FormCreateDangerButtonLink(path.Join("/", functionalPath, "deleteaccount"), "Delete Account"),
+		)
+	}
+
+	var dashboardPage GatehouseForm = GatehouseForm{
+		appName + " - Manage Account",
+		"Manage Account",
+		"/",
+		"GET",
+		dashButtons,
+		[]OIDCButton{},
+		functionalPath,
+	}
+	err = dashTemplate.Execute(response, dashboardPage)
+	if err != nil {
+		logMessage(1, fmt.Sprintf("Error rendering dashboard page: %s", err.Error()))
+		ServeErrorPage(response)
+	}
+
 }
 
 func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
@@ -492,22 +518,29 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 
 	if !allowUsernameChange {
 		ServePage(response, disabledFeaturePage)
-	} else if !validSession {
+		return
+	}
+	if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
-	} else if !validCriticalSession {
-		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeusername"), http.StatusSeeOther)
-	} else {
-		err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userId)
-		if err == sql.ErrNoRows {
-			ServePage(response, usernameChangeBlockedPage)
-		} else if err != nil {
-			panic(err)
-		} else {
-			ServePage(response, usernameChangePage)
-		}
-
+		return
 	}
+	if !validCriticalSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeusername"), http.StatusSeeOther)
+		return
+	}
+
+	err = db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts INNER JOIN %s_sessions ON user_id = id WHERE session_token = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userId)
+	if err == sql.ErrNoRows {
+		ServePage(response, usernameChangeBlockedPage)
+	} else if err != nil {
+		ServeErrorPage(response)
+		logDbError(err)
+		return
+	} else {
+		ServePage(response, usernameChangePage)
+	}
+
 }
 
 func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
@@ -593,49 +626,80 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 	if !allowUsernameLogin {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Feature Disabled.`)
-	} else if username == "" || password == "" {
+		return
+	}
+	if username == "" || password == "" {
 		response.WriteHeader(400)
-		fmt.Fprint(response, `400 - Invalid login details.`)
-	} else {
-		err := db.QueryRow(fmt.Sprintf("SELECT id, email, email_confirmed, password, mfa_type FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID, &email, &emailConfirmed, &passwordHash, &mfaType)
-		if err == sql.ErrNoRows {
-			http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
-		} else if err != nil {
-			panic(err)
-		} else if !CheckPasswordHash(password, passwordHash) {
-			http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
-		} else if allowMobileMFA && (mfaType == "token" || mfaType == "email" && emailConfirmed) {
-			// Begin multifactor session
-			sessionToken := GenerateMfaSessionToken()
-			cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteLaxMode, Secure: false, Path: "/"}
-			http.SetCookie(response, &cookie)
+		fmt.Fprint(response, `400 - Credentials Not Provided.`)
+		return
+	}
 
-			if mfaType == "email" {
-				mfaToken := GenerateRandomNumbers(6)
-				_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, mfaToken)
-				if err != nil {
-					panic(err)
-				}
+	err := db.QueryRow(fmt.Sprintf("SELECT id, email, email_confirmed, password, mfa_type FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID, &email, &emailConfirmed, &passwordHash, &mfaType)
+	if err == sql.ErrNoRows {
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
+		return
+	} else if err != nil {
+		ServeErrorPage(response)
+		logDbError(err)
+		return
+	}
 
-				err = sendMail(strings.ToLower(email), "Sign In - OTP", username, fmt.Sprintf("Your OTP code for %s is: %s", appName, mfaToken), "", "<b>If you did not request this action, please change your password immediately.</b>")
+	if !CheckPasswordHash(password, passwordHash) {
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
+		return
+	}
 
-				if err != nil {
-					ServeErrorPage(response)
-				} else {
-					ServePage(response, mfaEmailPage)
-				}
+	if !allowMobileMFA {
+		AuthenticateRequestor(response, request, userID)
+		return
+	}
 
-			} else {
-				_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "totp", userID, "")
-				if err != nil {
-					panic(err)
-				}
-				ServePage(response, mfaTokenPage)
-			}
-		} else {
-			AuthenticateRequestor(response, request, userID)
+	if mfaType == "email" && !emailConfirmed {
+		AuthenticateRequestor(response, request, userID)
+		return
+	}
+
+	// Begin multifactor session
+	sessionToken := GenerateMfaSessionToken()
+	cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
+	http.SetCookie(response, &cookie)
+
+	if mfaType == "email" {
+		mfaToken := GenerateRandomNumbers(6)
+		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, mfaToken)
+		if err != nil {
+			ServeErrorPage(response)
+			logDbError(err)
+			return
 		}
 
+		err = sendMail(
+			strings.ToLower(email),
+			"Sign In - OTP",
+			username,
+			fmt.Sprintf("Your OTP code for %s is: %s", appName, mfaToken),
+			"",
+			"<b>If you did not request this action, please change your password immediately.</b>",
+		)
+
+		if err != nil {
+			ServeErrorPage(response)
+			logMessage(2, fmt.Sprintf("User %s was not sent their email MFA code: %s", userID, err.Error()))
+		} else {
+			ServePage(response, mfaEmailPage)
+		}
+
+	} else if mfaType == "token" {
+		_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "totp", userID, "")
+		if err != nil {
+			ServeErrorPage(response)
+			logDbError(err)
+			return
+		}
+		ServePage(response, mfaTokenPage)
+	} else {
+		ServeErrorPage(response)
+		logMessage(1, fmt.Sprintf("Unrecognised MFA type in database: %s", mfaType))
 	}
 }
 
@@ -664,7 +728,9 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 		userID := GenerateUserID()
 		_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userID, username, email, HashPassword(password))
 		if err != nil {
-			panic(err)
+			ServeErrorPage(response)
+			logDbError(err)
+			return
 		}
 		SendEmailConfirmationCode(userID, email, username)
 		AuthenticateRequestor(response, request, userID)
@@ -688,25 +754,31 @@ func HandleSubReset(response http.ResponseWriter, request *http.Request) {
 	password := request.FormValue("password")
 	passwordConfirm := request.FormValue("passwordConfirm")
 
-	if code != "" && IsValidPassword(password) && password == passwordConfirm {
-		var userID string
-		err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ? AND used = 0", tablePrefix), code).Scan(&userID)
-		if err == sql.ErrNoRows {
-			response.WriteHeader(403)
-			fmt.Fprint(response, `403 - Unauthorized.`)
-		} else if err != nil {
-			panic(err)
-		} else {
-			_, err = db.Exec(fmt.Sprintf("UPDATE %s_resets INNER JOIN %s_accounts ON user_id = id SET password = ?, used = 1 WHERE reset_token = ?", tablePrefix, tablePrefix), HashPassword(password), code)
-			if err != nil {
-				panic(err)
-			}
-			ServePage(response, resetSuccessPage)
-		}
-	} else {
+	if code == "" || !IsValidPassword(password) || password != passwordConfirm {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid request.`)
 	}
+
+	var userID string
+	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ? AND used = 0", tablePrefix), code).Scan(&userID)
+	if err == sql.ErrNoRows {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `403 - Unauthorized.`)
+		return
+	} else if err != nil {
+		ServeErrorPage(response)
+		logDbError(err)
+		return
+	}
+
+	_, err = db.Exec(fmt.Sprintf("UPDATE %s_resets INNER JOIN %s_accounts ON user_id = id SET password = ?, used = 1 WHERE reset_token = ?", tablePrefix, tablePrefix), HashPassword(password), code)
+	if err != nil {
+		ServeErrorPage(response)
+		logDbError(err)
+		return
+	}
+	ServePage(response, resetSuccessPage)
+
 }
 
 func HandleSubOTP(response http.ResponseWriter, request *http.Request) {
