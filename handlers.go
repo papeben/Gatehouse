@@ -757,6 +757,7 @@ func HandleSubReset(response http.ResponseWriter, request *http.Request) {
 	if code == "" || !IsValidPassword(password) || password != passwordConfirm {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid request.`)
+		return
 	}
 
 	var userID string
