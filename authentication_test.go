@@ -24,8 +24,14 @@ func TestIsValidSession(t *testing.T) {
 	defer db.Close()
 
 	// Test with a valid session token
-	sessionToken := GenerateSessionToken()
-	userId := GenerateUserID()
+	sessionToken, err := GenerateSessionToken()
+	if err != nil {
+		panic(err)
+	}
+	userId, err := GenerateUserID()
+	if err != nil {
+		panic(err)
+	}
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id) VALUES (?)", tablePrefix), userId)
 	if err != nil {
 		t.Fatalf("Error inserting user into database: %v", err)
@@ -40,7 +46,10 @@ func TestIsValidSession(t *testing.T) {
 	}
 
 	// Test with an invalid session token
-	sessionToken = GenerateSessionToken()
+	sessionToken, err = GenerateSessionToken()
+	if err != nil {
+		panic(err)
+	}
 	valid = IsValidSession(sessionToken)
 	if valid {
 		t.Errorf("Expected IsValidSession to return false for invalid session token %s, but it returned true", sessionToken)
@@ -57,8 +66,14 @@ func TestPendingEmailApproval(t *testing.T) {
 
 	// Insert a test user with email unconfirmed
 	email := "test@example.com"
-	userId := GenerateUserID()
-	session := GenerateSessionToken()
+	userId, err := GenerateUserID()
+	if err != nil {
+		panic(err)
+	}
+	session, err := GenerateSessionToken()
+	if err != nil {
+		panic(err)
+	}
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, email, email_confirmed) VALUES (?, ?, false)", tablePrefix), userId, email)
 	if err != nil {
 		t.Fatalf("Error inserting test user into database: %v", err)
@@ -98,8 +113,14 @@ func TestConfirmEmailCode(t *testing.T) {
 	defer db.Close()
 
 	// insert test data
-	code := GenerateEmailConfirmationToken()
-	userId := GenerateUserID()
+	code, err := GenerateEmailConfirmationToken()
+	if err != nil {
+		panic(err)
+	}
+	userId, err := GenerateUserID()
+	if err != nil {
+		panic(err)
+	}
 	email := "testing@example.local"
 
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, email, email_confirmed) VALUES (?, ?, false)", tablePrefix), userId, email)
@@ -142,7 +163,11 @@ func TestConfirmEmailCode(t *testing.T) {
 func TestSendEmailConfirmationCode(t *testing.T) {
 	LoadTemplates()
 	t.Run("should send only one confirmation email to test@testing.local", func(t *testing.T) {
-		SendEmailConfirmationCode(GenerateUserID(), "test@testing.local", "test")
+		userId, err := GenerateUserID()
+		if err != nil {
+			panic(err)
+		}
+		SendEmailConfirmationCode(userId, "test@testing.local", "test")
 	})
 }
 
@@ -159,7 +184,10 @@ func TestResetPasswordRequest(t *testing.T) {
 		// Insert a test user with email unconfirmed
 		email := "test@example.local"
 		username := "testingreset"
-		userId := GenerateUserID()
+		userId, err := GenerateUserID()
+		if err != nil {
+			panic(err)
+		}
 		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email) VALUES (?, ?, ?)", tablePrefix), userId, username, email)
 		if err != nil {
 			t.Fatalf("Error inserting test user into database: %v", err)
@@ -188,8 +216,14 @@ func TestIsValidResetCode(t *testing.T) {
 	defer db.Close()
 
 	// insert test data
-	code := GenerateResetToken()
-	userID := GenerateUserID()
+	code, err := GenerateResetToken()
+	if err != nil {
+		panic(err)
+	}
+	userID, err := GenerateUserID()
+	if err != nil {
+		panic(err)
+	}
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_resets (reset_token, user_id, used) VALUES (?, ?, ?)", tablePrefix), code, userID, false)
 	if err != nil {
 		t.Fatalf("Error inserting test data: %s", err)
@@ -204,7 +238,10 @@ func TestIsValidResetCode(t *testing.T) {
 	}
 
 	// call the function with an invalid code
-	invalidCode := GenerateResetToken()
+	invalidCode, err := GenerateResetToken()
+	if err != nil {
+		panic(err)
+	}
 	result = IsValidResetCode(invalidCode)
 
 	// check the result
@@ -272,7 +309,10 @@ func TestEmailPermutations(t *testing.T) {
 	}
 
 	// Insert test user
-	userId := GenerateUserID()
+	userId, err := GenerateUserID()
+	if err != nil {
+		panic(err)
+	}
 	email := "existinguser@example.com"
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, email) VALUES (?, ?)", tablePrefix), userId, email)
 	if err != nil {
