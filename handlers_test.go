@@ -575,7 +575,10 @@ func TestRegistrationFlow(t *testing.T) {
 	})
 
 	t.Run("Submit invalid reset code", func(t *testing.T) {
-		resetToken := GenerateResetToken()
+		resetToken, err := GenerateResetToken()
+		if err != nil {
+			panic(err)
+		}
 
 		form := url.Values{}
 		form.Add("password", password)

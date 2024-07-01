@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +20,9 @@ import (
 func HashPassword(password string) string {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	if err != nil {
-		panic(err)
+		logMessage(0, fmt.Sprintf("Failed to generate BCRYPT hash of password string: %s", err.Error()))
+		logMessage(5, fmt.Sprintf("Password string: %s", password))
+		os.Exit(1)
 	}
 	return string(bytes)
 }
@@ -37,7 +40,8 @@ func GenerateRandomString(length int) string {
 	for i := 0; i < length; i++ {
 		num, err := rand.Int(rand.Reader, charsetLength)
 		if err != nil {
-			panic(err)
+			logMessage(0, fmt.Sprintf("Failed to generate random number: %s", err.Error()))
+			os.Exit(1)
 		}
 
 		bytes[i] = charset[num.Int64()]
@@ -54,7 +58,8 @@ func GenerateRandomNumbers(length int) string {
 	for i := 0; i < length; i++ {
 		num, err := rand.Int(rand.Reader, charsetLength)
 		if err != nil {
-			panic(err)
+			logMessage(0, fmt.Sprintf("Failed to generate random number: %s", err.Error()))
+			os.Exit(1)
 		}
 
 		bytes[i] = charset[num.Int64()]
@@ -107,77 +112,84 @@ func GenerateOTPSecret() string {
 	secret := make([]byte, 10)
 	_, err := rand.Read(secret)
 	if err != nil {
-		panic(err)
+		logMessage(0, fmt.Sprintf("Failed to read bytes: %s", err.Error()))
+		os.Exit(1)
 	}
 	secretBase32 := base32.StdEncoding.EncodeToString(secret)
 	return secretBase32
 }
 
-func GenerateUserID() string {
+func GenerateUserID() (string, error) {
 	newID := GenerateRandomString(8)
 
 	var userID string
 	err := db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE id = ?", tablePrefix), strings.ToLower(newID)).Scan(&userID)
 	if err == sql.ErrNoRows {
-		return newID
+		return newID, nil
 	} else if err != nil {
-		panic(err)
+		return "", err
 	} else {
-		return GenerateUserID()
+		newID, err = GenerateUserID()
+		return newID, err
 	}
 }
 
-func GenerateSessionToken() string {
+func GenerateSessionToken() (string, error) {
 	newToken := GenerateRandomString(64)
 	var userID string
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions WHERE session_token = ?", tablePrefix), newToken).Scan(&userID)
 	if err == sql.ErrNoRows {
-		return newToken
+		return newToken, nil
 	} else if err != nil {
-		panic(err)
+		logDbError(err)
+		return "", err
 	} else {
-		return GenerateSessionToken()
+		newToken, err = GenerateSessionToken()
+		return newToken, err
 	}
 }
 
-func GenerateResetToken() string {
+func GenerateResetToken() (string, error) {
 	newToken := GenerateRandomString(32)
 
 	var userID string
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ?", tablePrefix), newToken).Scan(&userID)
 	if err == sql.ErrNoRows {
-		return newToken
+		return newToken, nil
 	} else if err != nil {
-		panic(err)
+		return "", err
 	} else {
-		return GenerateResetToken()
+		newToken, err = GenerateResetToken()
+		return newToken, err
 	}
 }
 
-func GenerateMfaSessionToken() string {
+func GenerateMfaSessionToken() (string, error) {
 	newToken := GenerateRandomString(32)
 
 	var userID string
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ?", tablePrefix), newToken).Scan(&userID)
 	if err == sql.ErrNoRows {
-		return newToken
+		return newToken, nil
 	} else if err != nil {
-		panic(err)
+		return "", err
 	} else {
-		return GenerateMfaSessionToken()
+		newToken, err = GenerateMfaSessionToken()
+		return newToken, err
 	}
 }
 
-func GenerateEmailConfirmationToken() string {
+func GenerateEmailConfirmationToken() (string, error) {
 	newToken := GenerateRandomString(32)
 
 	var userID string
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_confirmations WHERE confirmation_token = ?", tablePrefix), newToken).Scan(&userID)
 	if err == sql.ErrNoRows {
-		return strings.ToLower(newToken)
+		return strings.ToLower(newToken), nil
 	} else if err != nil {
-		panic(err)
+		return "", err
 	} else {
-		return GenerateEmailConfirmationToken()
+		newToken, err = GenerateEmailConfirmationToken()
+		return strings.ToLower(newToken), err
 	}
 }

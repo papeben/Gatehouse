@@ -660,7 +660,12 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 	}
 
 	// Begin multifactor session
-	sessionToken := GenerateMfaSessionToken()
+	sessionToken, err := GenerateMfaSessionToken()
+	if err != nil {
+		ServeErrorPage(response)
+		logDbError(err)
+		return
+	}
 	cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
 	http.SetCookie(response, &cookie)
 
@@ -725,8 +730,13 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Passwords did not match.`)
 	} else {
-		userID := GenerateUserID()
-		_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userID, username, email, HashPassword(password))
+		userID, err := GenerateUserID()
+		if err != nil {
+			ServeErrorPage(response)
+			logDbError(err)
+			return
+		}
+		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userID, username, email, HashPassword(password))
 		if err != nil {
 			ServeErrorPage(response)
 			logDbError(err)
@@ -970,7 +980,13 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	elevatedSessionToken := GenerateSessionToken()
+	elevatedSessionToken, err := GenerateSessionToken()
+	if err != nil {
+		ServeErrorPage(response)
+		logDbError(err)
+		return
+	}
+
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id, critical) VALUES (?, ?, 1)", tablePrefix), elevatedSessionToken, userID)
 	if err != nil {
 		ServeErrorPage(response)

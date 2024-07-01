@@ -14,10 +14,15 @@ import (
 )
 
 func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, userID string) {
-	token := GenerateSessionToken()
+	token, err := GenerateSessionToken()
+	if err != nil {
+		ServeErrorPage(response)
+		logDbError(err)
+		return
+	}
 	logMessage(4, fmt.Sprintf("User %s (%s) authenticated", userID, request.RemoteAddr))
 
-	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userID)
+	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userID)
 	if err != nil {
 		logDbError(err)
 		ServeErrorPage(response)
@@ -123,11 +128,17 @@ func ConfirmEmailCode(code string) bool {
 }
 
 func SendEmailConfirmationCode(userID string, email string, username string) {
-	code := GenerateEmailConfirmationToken()
-	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_confirmations (confirmation_token, user_id) VALUES (?, ?)", tablePrefix), code, userID)
+	code, err := GenerateEmailConfirmationToken()
+
+	if err == nil {
+		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_confirmations (confirmation_token, user_id) VALUES (?, ?)", tablePrefix), code, userID)
+	}
+
 	if err != nil {
 		logDbError(err)
-	} else {
+	}
+
+	if err == nil {
 		// Email code
 		err = sendMail(email, "Confirm your Email Address", username, fmt.Sprintf("Thank you for signing up to %s! Please confirm your email by clicking the link below:", appName), fmt.Sprintf("%s/%s/confirmcode?c=%s", webDomain, functionalPath, code), "If you did not request this action, please ignore this email.")
 	}
@@ -252,7 +263,11 @@ func ResetPasswordRequest(email string) bool {
 		return false
 	} else {
 		// Reset password
-		resetCode := GenerateResetToken()
+		resetCode, err := GenerateResetToken()
+		if err != nil {
+			logDbError(err)
+			return false
+		}
 		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_resets (user_id, reset_token) VALUES (?, ?)", tablePrefix), userID, resetCode)
 		if err != nil {
 			logDbError(err)
