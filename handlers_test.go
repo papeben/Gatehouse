@@ -49,7 +49,6 @@ func sendGetRequest(path string, withValidSession bool, withValidCriticalSession
 		validateDummyEmail(userId)
 	}
 
-	fmt.Println(req.Cookies())
 	recorder := httptest.NewRecorder()
 	handler := http.HandlerFunc(HandleMain)
 	handler.ServeHTTP(recorder, req)
@@ -57,18 +56,18 @@ func sendGetRequest(path string, withValidSession bool, withValidCriticalSession
 }
 
 func createDummyUser() string {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
-	userId, _ := GenerateUserID()
+	userId := GenerateRandomString(8)
 	username := GenerateRandomString(16)
 	password := GenerateRandomString(16)
 	email := GenerateRandomString(16) + "@testing.local"
 
-	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userId, username, email, HashPassword(password))
+	tempDb, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer tempDb.Close()
+
+	_, err = tempDb.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userId, username, email, HashPassword(password))
 	if err != nil {
 		panic(err)
 	}
@@ -77,8 +76,14 @@ func createDummyUser() string {
 }
 
 func createDummySession(userId string) string {
-	token, _ := GenerateSessionToken()
-	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userId)
+	tempDb, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer tempDb.Close()
+
+	token := GenerateRandomString(64)
+	_, err = tempDb.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userId)
 	if err != nil {
 		panic(err)
 	}
@@ -86,12 +91,18 @@ func createDummySession(userId string) string {
 }
 
 func createDummyMFASession(userId string) string {
-	mfaToken := GenerateRandomNumbers(6)
-	mfaSessionToken, err := GenerateMfaSessionToken()
+	tempDb, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 	if err != nil {
 		panic(err)
 	}
-	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), mfaSessionToken, "totp", userId, mfaToken)
+	defer tempDb.Close()
+
+	mfaToken := GenerateRandomNumbers(6)
+	mfaSessionToken := GenerateRandomString(32)
+	if err != nil {
+		panic(err)
+	}
+	_, err = tempDb.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), mfaSessionToken, "totp", userId, mfaToken)
 	if err != nil {
 		panic(err)
 	}
@@ -99,8 +110,14 @@ func createDummyMFASession(userId string) string {
 }
 
 func createDummyElevatedSession(userId string) string {
-	elevatedSessionToken, _ := GenerateSessionToken()
-	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id, critical) VALUES (?, ?, 1)", tablePrefix), elevatedSessionToken, userId)
+	tempDb, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer tempDb.Close()
+
+	elevatedSessionToken := GenerateRandomString(64)
+	_, err = tempDb.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id, critical) VALUES (?, ?, 1)", tablePrefix), elevatedSessionToken, userId)
 	if err != nil {
 		panic(err)
 	}
@@ -108,7 +125,13 @@ func createDummyElevatedSession(userId string) string {
 }
 
 func validateDummyEmail(userId string) {
-	_, err := db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_confirmed = 1 WHERE id = ?", tablePrefix), userId)
+	tempDb, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer tempDb.Close()
+
+	_, err = tempDb.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_confirmed = 1 WHERE id = ?", tablePrefix), userId)
 	if err != nil {
 		panic(err)
 	}
@@ -888,11 +911,93 @@ func TestPageRequests(t *testing.T) {
 
 	var responseCode int
 	for _, p := range reqPermutations {
-		t.Run(fmt.Sprintf("Submit password reset %s", p.path), func(t *testing.T) {
+		t.Run(fmt.Sprintf("GET page %s", p.path), func(t *testing.T) {
 			responseCode, _ = sendGetRequest(p.path, p.withSession, p.withCriticalSession, p.withMFASession, p.emailVerified)
 			if responseCode != p.expectedCode {
 				t.Errorf("Requesting path '%s' returned code %v when %v was expected. Session: %t, Critical: %t, MFA: %t, Email: %t", p.path, responseCode, p.expectedCode, p.withSession, p.withCriticalSession, p.withMFASession, p.emailVerified)
 			}
 		})
 	}
+}
+
+func TestPageDatabaseFailure(t *testing.T) {
+	var reqPermutations = []struct {
+		path                string
+		withSession         bool
+		withCriticalSession bool
+		withMFASession      bool
+		emailVerified       bool
+		expectedCode        int
+	}{
+		{"/", false, false, false, false, 500},
+		{"/", true, false, false, false, 500},
+		{"/gatehouse/login", true, false, false, true, 200},
+		{"/gatehouse/login", false, false, false, false, 200},
+		{"/gatehouse/register", true, false, false, true, 200},
+		{"/gatehouse/register", false, false, false, true, 200},
+		{"/gatehouse/forgot", true, false, false, true, 200},
+		{"/gatehouse/forgot", false, false, false, false, 200},
+		{"/gatehouse/confirmemail", true, false, false, true, 200},
+		{"/gatehouse/confirmemail", false, false, false, false, 200},
+		{"/gatehouse/confirmcode", true, false, false, true, 400},
+		{"/gatehouse/confirmcode", false, false, false, false, 400},
+		{"/gatehouse/resetpassword", true, false, false, true, 410},
+		{"/gatehouse/resetpassword", false, false, false, false, 410},
+		{"/gatehouse/resendconfirmation", true, false, false, false, 500},
+		{"/gatehouse/resendconfirmation", false, false, false, false, 303},
+		{"/gatehouse/usernametaken?u=uhafiauywfgbiauwf", false, false, false, false, 500},
+		{"/gatehouse/usernametaken?u=uhafiauywfgbiauwf", true, false, false, false, 500},
+		{"/gatehouse/usernametaken", false, false, false, false, 400},
+		{"/gatehouse/addmfa", true, false, false, true, 500},
+		{"/gatehouse/addmfa", true, false, false, false, 500},
+		{"/gatehouse/addmfa", false, false, false, false, 500},
+		{"/gatehouse/removemfa", true, false, false, true, 500},
+		{"/gatehouse/removemfa", true, false, false, false, 500},
+		{"/gatehouse/removemfa", false, false, false, false, 500},
+		{"/gatehouse/removemfa", true, true, false, false, 500},
+		{"/gatehouse/elevate", false, false, false, false, 500},
+		{"/gatehouse/elevate", true, false, false, true, 500},
+		{"/gatehouse/elevate?t=removemfa", true, true, false, false, 500},
+		{"/gatehouse/elevate?t=removemfa", true, false, false, true, 500},
+		{"/gatehouse/elevate?t=removemfa", false, false, false, false, 500},
+		{"/gatehouse/elevate?t=notarealfunc", true, false, false, true, 500},
+		{"/gatehouse/manage", false, false, false, false, 500},
+		{"/gatehouse/manage", true, false, false, false, 500},
+		{"/gatehouse/manage", true, false, false, true, 500},
+		{"/gatehouse/changeemail", false, false, false, false, 500},
+		{"/gatehouse/changeemail", true, false, false, false, 500},
+		{"/gatehouse/changeemail", true, true, false, false, 500},
+		{"/gatehouse/changeusername", false, false, false, false, 500},
+		{"/gatehouse/changeusername", true, false, false, true, 500},
+		{"/gatehouse/changeusername", true, true, false, true, 500},
+		{"/gatehouse/deleteaccount", false, false, false, false, 500},
+		{"/gatehouse/deleteaccount", true, false, false, true, 500},
+		{"/gatehouse/deleteaccount", true, true, false, true, 500},
+		{"/gatehouse/recoverycode", false, false, false, false, 500},
+		{"/gatehouse/recoverycode", true, false, false, true, 500},
+		{"/gatehouse/recoverycode", true, false, true, true, 500},
+		{"/gatehouse/revokesessions", false, false, false, false, 500},
+		{"/gatehouse/revokesessions", true, false, false, true, 500},
+	}
+
+	db.Close()
+
+	var responseCode int
+	for _, p := range reqPermutations {
+		t.Run(fmt.Sprintf("GET page %s", p.path), func(t *testing.T) {
+			responseCode, _ = sendGetRequest(p.path, p.withSession, p.withCriticalSession, p.withMFASession, p.emailVerified)
+			if responseCode != p.expectedCode {
+				t.Errorf("Requesting path '%s' returned code %v when %v was expected. Session: %t, Critical: %t, MFA: %t, Email: %t", p.path, responseCode, p.expectedCode, p.withSession, p.withCriticalSession, p.withMFASession, p.emailVerified)
+			}
+		})
+	}
+
+	mysqlPassword = envWithDefault("MYSQL_PASS", "password")
+
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
 }
