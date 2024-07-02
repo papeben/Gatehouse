@@ -198,6 +198,7 @@ func HandlePasswordResetCode(response http.ResponseWriter, request *http.Request
 		customResetPage.FormAction += fmt.Sprintf("?c=%s", resetCode)
 		ServePage(response, customResetPage)
 	} else {
+		response.WriteHeader(410)
 		ServePage(response, linkExpired)
 	}
 }
@@ -238,8 +239,7 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 		validSession = IsValidSession(sessionCookie.Value)
 	}
 	if !validSession {
-		response.WriteHeader(403)
-		fmt.Fprint(response, `Unauthorized.`)
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
 		return
 	}
 
@@ -255,8 +255,7 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 
 	err = db.QueryRow(fmt.Sprintf("SELECT user_id, email, username, mfa_type, mfa_secret FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &email, &username, &mfaType, &mfaStoredSecret)
 	if err == sql.ErrNoRows {
-		response.WriteHeader(403)
-		fmt.Fprint(response, `Unauthorized.`)
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
 		return
 	} else if err != nil {
 		ServeErrorPage(response)
@@ -320,8 +319,7 @@ func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
 	target := request.URL.Query().Get("t")
 
 	if !validSession {
-		response.WriteHeader(403)
-		fmt.Fprint(response, `Unauthorized.`)
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
 		return
 	}
 	if target == "" {
@@ -357,8 +355,7 @@ func HandleRemoveMFA(response http.ResponseWriter, request *http.Request) {
 	}
 
 	if !validSession {
-		response.WriteHeader(403)
-		fmt.Fprint(response, `Unauthorized.`)
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
 	} else if !validCriticalSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=removemfa"), http.StatusSeeOther)
 	} else {
@@ -490,8 +487,7 @@ func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
 	if !allowEmailChange {
 		ServePage(response, disabledFeaturePage)
 	} else if !validSession {
-		response.WriteHeader(403)
-		fmt.Fprint(response, `Unauthorized.`)
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
 	} else if !validCriticalSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeemail"), http.StatusSeeOther)
 	} else {
@@ -521,8 +517,7 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	if !validSession {
-		response.WriteHeader(403)
-		fmt.Fprint(response, `Unauthorized.`)
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
 		return
 	}
 	if !validCriticalSession {
@@ -562,8 +557,7 @@ func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
 	if !allowDeleteAccount {
 		ServePage(response, disabledFeaturePage)
 	} else if !validSession {
-		response.WriteHeader(403)
-		fmt.Fprint(response, `Unauthorized.`)
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
 	} else if !validCriticalSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=deleteaccount"), http.StatusSeeOther)
 	} else {
@@ -584,8 +578,7 @@ func HandleSessionRevoke(response http.ResponseWriter, request *http.Request) {
 	if !allowSessionRevoke {
 		ServePage(response, disabledFeaturePage)
 	} else if !validSession {
-		response.WriteHeader(403)
-		fmt.Fprint(response, `Unauthorized.`)
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
 	} else {
 		var sessionRevokePage = GatehouseForm{
 			appName + " - Sign Out All Devices",

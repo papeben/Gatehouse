@@ -35,20 +35,21 @@ func sendGetRequest(path string, withValidSession bool, withValidCriticalSession
 	}
 	if withValidSession {
 		sessionToken := createDummySession(userId)
-		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken})
+		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"})
 	}
 	if withValidCriticalSession {
-		critSessionToken := createDummyElevatedSession(userId)
-		req.AddCookie(&http.Cookie{Name: criticalCookieName, Value: critSessionToken})
+		elevatedSessionToken := createDummyElevatedSession(userId)
+		req.AddCookie(&http.Cookie{Name: criticalCookieName, Value: elevatedSessionToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"})
 	}
 	if withValidMFASession {
 		mfaSessionToken := createDummyMFASession(userId)
-		req.AddCookie(&http.Cookie{Name: mfaCookieName, Value: mfaSessionToken})
+		req.AddCookie(&http.Cookie{Name: mfaCookieName, Value: mfaSessionToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"})
 	}
 	if emailVerified {
 		validateDummyEmail(userId)
 	}
 
+	fmt.Println(req.Cookies())
 	recorder := httptest.NewRecorder()
 	handler := http.HandlerFunc(HandleMain)
 	handler.ServeHTTP(recorder, req)
@@ -67,33 +68,50 @@ func createDummyUser() string {
 	password := GenerateRandomString(16)
 	email := GenerateRandomString(16) + "@testing.local"
 
-	_, _ = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userId, username, email, HashPassword(password))
+	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userId, username, email, HashPassword(password))
+	if err != nil {
+		panic(err)
+	}
 
 	return userId
 }
 
 func createDummySession(userId string) string {
 	token, _ := GenerateSessionToken()
-	_, _ = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userId)
+	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userId)
+	if err != nil {
+		panic(err)
+	}
 	return token
 }
 
 func createDummyMFASession(userId string) string {
-	token, _ := GenerateMfaSessionToken()
 	mfaToken := GenerateRandomNumbers(6)
-	_, _ = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), token, "email", userId, mfaToken)
-	return token
+	mfaSessionToken, err := GenerateMfaSessionToken()
+	if err != nil {
+		panic(err)
+	}
+	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), mfaSessionToken, "totp", userId, mfaToken)
+	if err != nil {
+		panic(err)
+	}
+	return mfaSessionToken
 }
 
 func createDummyElevatedSession(userId string) string {
-	token, _ := GenerateSessionToken()
 	elevatedSessionToken, _ := GenerateSessionToken()
-	_, _ = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id, critical) VALUES (?, ?, 1)", tablePrefix), elevatedSessionToken, userId)
-	return token
+	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id, critical) VALUES (?, ?, 1)", tablePrefix), elevatedSessionToken, userId)
+	if err != nil {
+		panic(err)
+	}
+	return elevatedSessionToken
 }
 
 func validateDummyEmail(userId string) {
-	_, _ = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_confirmed = 1 WHERE id = ?", tablePrefix), userId)
+	_, err := db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_confirmed = 1 WHERE id = ?", tablePrefix), userId)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func TestRegistrationFlow(t *testing.T) {
@@ -829,31 +847,43 @@ func TestPageRequests(t *testing.T) {
 		{"/gatehouse/confirmemail", false, false, false, false, 200},
 		{"/gatehouse/confirmcode", true, false, false, true, 400},
 		{"/gatehouse/confirmcode", false, false, false, false, 400},
-		{"/gatehouse/resetpassword", true, false, false, true, 400},
-		{"/gatehouse/resetpassword", false, false, false, false, 400},
+		{"/gatehouse/resetpassword", true, false, false, true, 410},
+		{"/gatehouse/resetpassword", false, false, false, false, 410},
 		{"/gatehouse/resendconfirmation", true, false, false, false, 200},
 		{"/gatehouse/resendconfirmation", false, false, false, false, 303},
 		{"/gatehouse/usernametaken?u=uhafiauywfgbiauwf", false, false, false, false, 200},
 		{"/gatehouse/usernametaken?u=uhafiauywfgbiauwf", true, false, false, false, 200},
 		{"/gatehouse/usernametaken", false, false, false, false, 400},
 		{"/gatehouse/addmfa", true, false, false, true, 200},
-		{"/gatehouse/addmfa", true, false, false, false, 303},
+		{"/gatehouse/addmfa", true, false, false, false, 200},
 		{"/gatehouse/addmfa", false, false, false, false, 303},
 		{"/gatehouse/removemfa", true, false, false, true, 303},
 		{"/gatehouse/removemfa", true, false, false, false, 303},
 		{"/gatehouse/removemfa", false, false, false, false, 303},
 		{"/gatehouse/removemfa", true, true, false, false, 200},
-		{"/gatehouse/removemfa", true, true, false, true, 200},
 		{"/gatehouse/elevate", false, false, false, false, 303},
-		{"/gatehouse/elevate", true, true, false, false, 200},
-		{"/gatehouse/elevate", true, false, false, true, 200},
-		{"/gatehouse/manage", false, false, false, false, 200},
-		{"/gatehouse/manage", false, false, false, false, 200},
-		{"/gatehouse/changeemail", false, false, false, false, 200},
-		{"/gatehouse/changeusername", false, false, false, false, 200},
-		{"/gatehouse/deleteaccount", false, false, false, false, 200},
-		{"/gatehouse/recoverycode", false, false, false, false, 200},
-		{"/gatehouse/revokesessions", false, false, false, false, 200},
+		{"/gatehouse/elevate", true, false, false, true, 400},
+		{"/gatehouse/elevate?t=removemfa", true, true, false, false, 200},
+		{"/gatehouse/elevate?t=removemfa", true, false, false, true, 200},
+		{"/gatehouse/elevate?t=removemfa", false, false, false, false, 303},
+		{"/gatehouse/elevate?t=notarealfunc", true, false, false, true, 400},
+		{"/gatehouse/manage", false, false, false, false, 303},
+		{"/gatehouse/manage", true, false, false, false, 200},
+		{"/gatehouse/manage", true, false, false, true, 200},
+		{"/gatehouse/changeemail", false, false, false, false, 303},
+		{"/gatehouse/changeemail", true, false, false, false, 303},
+		{"/gatehouse/changeemail", true, true, false, false, 200},
+		{"/gatehouse/changeusername", false, false, false, false, 303},
+		{"/gatehouse/changeusername", true, false, false, true, 303},
+		{"/gatehouse/changeusername", true, true, false, true, 200},
+		{"/gatehouse/deleteaccount", false, false, false, false, 303},
+		{"/gatehouse/deleteaccount", true, false, false, true, 303},
+		{"/gatehouse/deleteaccount", true, true, false, true, 200},
+		{"/gatehouse/recoverycode", false, false, false, false, 303},
+		{"/gatehouse/recoverycode", true, false, false, true, 303},
+		{"/gatehouse/recoverycode", true, false, true, true, 200},
+		{"/gatehouse/revokesessions", false, false, false, false, 303},
+		{"/gatehouse/revokesessions", true, false, false, true, 200},
 	}
 
 	var responseCode int

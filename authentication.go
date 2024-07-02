@@ -55,6 +55,7 @@ func IsValidSession(sessionToken string) bool {
 
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userId)
 	if err == sql.ErrNoRows {
+		logMessage(5, "Invalid session token presented")
 		return false
 	} else if err != nil {
 		logDbError(err)
@@ -72,6 +73,7 @@ func IsValidSessionWithInfo(sessionToken string) (bool, string, string, bool) {
 	)
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id, email, email_confirmed FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID, &userEmail, &emailConfirmed)
 	if err == sql.ErrNoRows {
+		logMessage(5, "Invalid session token presented")
 		return false, "", "", false
 	} else if err != nil {
 		logDbError(err)
@@ -85,6 +87,7 @@ func IsValidCriticalSession(sessionToken string) bool {
 	var userID string
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 1 AND created > NOW() - INTERVAL 1 HOUR", tablePrefix, tablePrefix), sessionToken).Scan(&userID)
 	if err != nil && err == sql.ErrNoRows {
+		logMessage(5, "Invalid critical session token presented")
 		return false
 	} else if err != nil {
 		logDbError(err)
