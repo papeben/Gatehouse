@@ -14,6 +14,11 @@ import (
 	"time"
 )
 
+type formFields struct {
+	field string
+	value string
+}
+
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	InitDatabase(1)
@@ -47,6 +52,34 @@ func sendGetRequest(path string, withValidSession bool, withValidCriticalSession
 	}
 	if emailVerified {
 		validateDummyEmail(userId)
+	}
+
+	recorder := httptest.NewRecorder()
+	handler := http.HandlerFunc(HandleMain)
+	handler.ServeHTTP(recorder, req)
+	return recorder.Code, recorder.Body
+}
+
+func sendPostRequest(path string, sessionToken string, elevatedToken string, MFAToken string, formValues []formFields) (int, *bytes.Buffer) {
+	form := url.Values{}
+	for _, v := range formValues {
+		form.Add(v.field, v.value)
+	}
+
+	req, err := http.NewRequest("POST", path, strings.NewReader(form.Encode()))
+	if err != nil {
+		return 0, nil
+	}
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	if sessionToken != "" {
+		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"})
+	}
+	if elevatedToken != "" {
+		req.AddCookie(&http.Cookie{Name: criticalCookieName, Value: elevatedToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"})
+	}
+	if MFAToken != "" {
+		req.AddCookie(&http.Cookie{Name: mfaCookieName, Value: MFAToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"})
 	}
 
 	recorder := httptest.NewRecorder()
@@ -992,12 +1025,128 @@ func TestPageDatabaseFailure(t *testing.T) {
 		})
 	}
 
-	mysqlPassword = envWithDefault("MYSQL_PASS", "password")
-
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	var err error
+	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
 	if err != nil {
 		panic(err)
 	}
-	defer db.Close()
 
+}
+
+func TestPostRequests(t *testing.T) {
+
+	userId := GenerateRandomString(8)
+	username := GenerateRandomString(16)
+	password := "ThisIsAQualityPassword123"
+	email := GenerateRandomString(16) + "@testing.local"
+	sessionToken := createDummySession(userId)
+	mfaSession := createDummyMFASession(userId)
+	elevatedSession := createDummyElevatedSession(userId)
+	validateDummyEmail(userId)
+
+	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userId, username, email, HashPassword(password))
+	if err != nil {
+		panic(err)
+	}
+
+	deletedUserId := GenerateRandomString(8)
+	deletedUsername := GenerateRandomString(16)
+	deletedPassword := "ThisIsAQualityPassword123"
+	deletedEmail := GenerateRandomString(16) + "@testing.local"
+	deletedSessionToken := createDummySession(deletedUserId)
+	deletedElevatedSession := createDummyElevatedSession(deletedUserId)
+	validateDummyEmail(deletedUserId)
+
+	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), deletedUserId, deletedUsername, deletedEmail, HashPassword(deletedPassword))
+	if err != nil {
+		panic(err)
+	}
+
+	var reqPermutations = []struct {
+		path                string
+		sessionToken        string
+		elevatedToken       string
+		MFAToken            string
+		expectedCode        int
+		formValues          []formFields
+	}{
+		{"/gatehouse/submit/login", "", "", "", 303, []formFields{{"username", username}, {"password", password}}},
+		{"/gatehouse/submit/register", "", "", "", 303, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/mfa", "", "", mfaSession, 303, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/validatemfa", sessionToken, "", "", 400, []formFields{{"otp", "123456"}}},
+		{"/gatehouse/submit/elevate?t=changeusername", sessionToken, "", "", 303, []formFields{{"password", password}}},
+		{"/gatehouse/submit/elevate?t=changeusername", sessionToken, "", "", 303, []formFields{{"password", password}}},
+		{"/gatehouse/submit/removemfa", sessionToken, elevatedSession, "", 400, []formFields{{"password", password}}},
+		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 200, []formFields{{"newemail", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 200, []formFields{{"newUsername", GenerateRandomString(8)}}},
+		{"/gatehouse/submit/recoverycode", "", "", mfaSession, 303, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/revokesessions", sessionToken, elevatedSession, "", 200, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/deleteaccount", deletedSessionToken, deletedElevatedSession, "", 200, []formFields{}},
+	}
+
+	var responseCode int
+	for _, p := range reqPermutations {
+		t.Run(fmt.Sprintf("POST page %s", p.path), func(t *testing.T) {
+			responseCode, _ = sendPostRequest(p.path, p.sessionToken, p.elevatedToken, p.MFAToken, p.formValues)
+			if responseCode != p.expectedCode {
+				t.Errorf("Requesting path '%s' returned code %v when %v was expected.", p.path, responseCode, p.expectedCode)
+			}
+		})
+	}
+}
+
+func TestPostDatabaseFailure(t *testing.T) {
+
+	userId := GenerateRandomString(8)
+	username := GenerateRandomString(16)
+	password := "ThisIsAQualityPassword123"
+	email := GenerateRandomString(16) + "@testing.local"
+	sessionToken := createDummySession(userId)
+	mfaSession := createDummyMFASession(userId)
+	elevatedSession := createDummyElevatedSession(userId)
+	validateDummyEmail(userId)
+
+	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userId, username, email, HashPassword(password))
+	if err != nil {
+		panic(err)
+	}
+
+	db.Close()
+
+	var reqPermutations = []struct {
+		path                string
+		sessionToken        string
+		elevatedToken       string
+		MFAToken            string
+		expectedCode        int
+		formValues          []formFields
+	}{
+		{"/gatehouse/submit/login", "", "", "", 500, []formFields{{"username", username}, {"password", password}}},
+		{"/gatehouse/submit/register", "", "", "", 500, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/mfa", "", "", mfaSession, 500, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/validatemfa", sessionToken, "", "", 500, []formFields{{"otp", "123456"}}},
+		{"/gatehouse/submit/elevate?t=changeusername", sessionToken, "", "", 500, []formFields{{"password", password}}},
+		{"/gatehouse/submit/elevate?t=changeusername", sessionToken, "", "", 500, []formFields{{"password", password}}},
+		{"/gatehouse/submit/removemfa", sessionToken, elevatedSession, "", 500, []formFields{{"password", password}}},
+		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 500, []formFields{{"newemail", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 500, []formFields{{"newUsername", GenerateRandomString(8)}}},
+		{"/gatehouse/submit/recoverycode", "", "", mfaSession, 500, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/revokesessions", sessionToken, elevatedSession, "", 500, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/deleteaccount", sessionToken, elevatedSession, "", 500, []formFields{}},
+	}
+
+	var responseCode int
+	for _, p := range reqPermutations {
+		t.Run(fmt.Sprintf("POST page %s", p.path), func(t *testing.T) {
+			responseCode, _ = sendPostRequest(p.path, p.sessionToken, p.elevatedToken, p.MFAToken, p.formValues)
+			if responseCode != p.expectedCode {
+				t.Errorf("Requesting path '%s' returned code %v when %v was expected.", p.path, responseCode, p.expectedCode)
+			}
+		})
+	}
+
+	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
 }
