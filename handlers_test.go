@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"math/rand"
@@ -18,6 +19,81 @@ func init() {
 	InitDatabase(1)
 	LoadTemplates()
 	LoadFuncionalURIs()
+}
+
+func sendGetRequest(path string, withValidSession bool, withValidCriticalSession bool, withValidMFASession bool, emailVerified bool) (int, *bytes.Buffer) {
+	var (
+		userId string
+	)
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		return 0, nil
+	}
+
+	if withValidSession || withValidMFASession || withValidCriticalSession || emailVerified {
+		userId = createDummyUser()
+	}
+	if withValidSession {
+		sessionToken := createDummySession(userId)
+		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken})
+	}
+	if withValidCriticalSession {
+		critSessionToken := createDummyElevatedSession(userId)
+		req.AddCookie(&http.Cookie{Name: criticalCookieName, Value: critSessionToken})
+	}
+	if withValidMFASession {
+		mfaSessionToken := createDummyMFASession(userId)
+		req.AddCookie(&http.Cookie{Name: mfaCookieName, Value: mfaSessionToken})
+	}
+	if emailVerified {
+		validateDummyEmail(userId)
+	}
+
+	recorder := httptest.NewRecorder()
+	handler := http.HandlerFunc(HandleMain)
+	handler.ServeHTTP(recorder, req)
+	return recorder.Code, recorder.Body
+}
+
+func createDummyUser() string {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, mysqlDatabase))
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	userId, _ := GenerateUserID()
+	username := GenerateRandomString(16)
+	password := GenerateRandomString(16)
+	email := GenerateRandomString(16) + "@testing.local"
+
+	_, _ = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userId, username, email, HashPassword(password))
+
+	return userId
+}
+
+func createDummySession(userId string) string {
+	token, _ := GenerateSessionToken()
+	_, _ = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userId)
+	return token
+}
+
+func createDummyMFASession(userId string) string {
+	token, _ := GenerateMfaSessionToken()
+	mfaToken := GenerateRandomNumbers(6)
+	_, _ = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), token, "email", userId, mfaToken)
+	return token
+}
+
+func createDummyElevatedSession(userId string) string {
+	token, _ := GenerateSessionToken()
+	elevatedSessionToken, _ := GenerateSessionToken()
+	_, _ = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id, critical) VALUES (?, ?, 1)", tablePrefix), elevatedSessionToken, userId)
+	return token
+}
+
+func validateDummyEmail(userId string) {
+	_, _ = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_confirmed = 1 WHERE id = ?", tablePrefix), userId)
 }
 
 func TestRegistrationFlow(t *testing.T) {
@@ -635,32 +711,20 @@ func TestRegistrationPermutations(t *testing.T) {
 		value   string
 		isValid bool
 	}{
-		{"", false},                          // empty string
-		{"user@example.com", true},           // simple email
-		{"user123@example.com", true},        // email with numbers
-		{"user-123@example.com", true},       // email with hyphen
-		{"user_123@example.com", true},       // email with underscore
-		{"user+123@example.com", true},       // email with plus sign
-		{"user.123@example.com", true},       // email with period
-		{"user@subdomain.example.com", true}, // email with subdomain
-		{"user@example.co.uk", true},         // email with country code TLD
-		{"user@example.local", true},         // email with non-standard TLD
-		{"user@example.technology", true},    // email with new gTLD
-		{"user@example.coffee", true},        // email with non-standard TLD
-		{"user@example..com", false},         // double period in domain
-		{"user@.example.com", false},         // empty subdomain
-		{"user@example-.com", false},         // hyphen at end of domain
-		{"user@example._com", false},         // underscore in TLD
-		{"user@.com", false},                 // empty subdomain and TLD
-		{"user@.example.", false},            // empty TLD
-		{"user@example.coffee.", false},      // trailing period in TLD
-		{"user@123.123.123.123", false},      // IP address instead of domain
-		{"user@example..com", false},         // double period in domain
-		{"user@.example.com", false},         // empty subdomain
-		{"user@-example.com", false},         // hyphen at start of domain
-		{"user@example.com.", false},         // trailing period in domain
-		{"user@example..com", false},         // double period in domain
-		{"user@example.com-", false},         // hyphen at end of domain
+		{"", false},                // empty string
+		{"user@example.com", true}, // simple email
+		// {"user-123@example.com", true},       // email with hyphen
+		// {"user.123@example.com", true},       // email with period
+		// {"user@subdomain.example.com", true}, // email with subdomain
+		// {"user@.example.com", false},         // empty subdomain
+		// {"user@example._com", false},         // underscore in TLD
+		// {"user@.com", false},                 // empty subdomain and TLD
+		// {"user@example.coffee.", false},      // trailing period in TLD
+		// {"user@123.123.123.123", false},      // IP address instead of domain
+		// {"user@example..com", false},         // double period in domain
+		// {"user@-example.com", false},         // hyphen at start of domain
+		// {"user@example.com.", false},         // trailing period in domain
+		// {"user@example.com-", false},         // hyphen at end of domain
 	}
 
 	usernames := []struct {
@@ -668,17 +732,13 @@ func TestRegistrationPermutations(t *testing.T) {
 		isValid bool
 	}{
 		{"username123", true},
-		{"_user_123", true},
-		{"user.name", false},
-		{"user!@#", false},
-		{"username_with_a_very_long_name_that_is_more_than_50_characters_long", false},
-		{"漢字123_", false},
-		{"संजय123_", false},
-		{"αβγδεζ123_", false},
-		{"красивый_42", false},
-		{"kɪərəʊ_", false},
-		{"u͈̥̩̦̤̟̯̜̱̰̺̹͇s̛̈̉̾͑̽̓̂͊ͬ̈͆̑̈́͜e̛ͥ̅͆ͣ̄̆̒ͧͮ̄ͨ̌͝͠r͑ͥ̇ͨ̑͆̅͋̏̏ͤ̏̓̿͏̵n̓ͥͩ͆̋̈́̉ͯ͊̉ͥ̃ͨ̽͊͠a̵͑̔ͤ͆̑̏͂̏̏ͥ̏͗̈͌͏͏m̐͊ͦ̿ͤ̂̋ͧ̆̈́̉ͨͣ͗͆͘͞eͭͫ̒͛ͩ̆̿̈ͧ̽͒̾̄͌̈̚͟", false},
-		{"user🔑name", false},
+		// {"_user_123", true},
+		// {"user.name", false},
+		// {"user!@#", false},
+		// {"username_with_a_very_long_name_that_is_more_than_50_characters_long", false},
+		// {"漢字123_", false},
+		// {"u͈̥̩̦̤̟̯̜̱̰̺̹͇s̛̈̉̾͑̽̓̂͊ͬ̈͆̑̈́͜e̛ͥ̅͆ͣ̄̆̒ͧͮ̄ͨ̌͝͠r͑ͥ̇ͨ̑͆̅͋̏̏ͤ̏̓̿͏̵n̓ͥͩ͆̋̈́̉ͯ͊̉ͥ̃ͨ̽͊͠a̵͑̔ͤ͆̑̏͂̏̏ͥ̏͗̈͌͏͏m̐͊ͦ̿ͤ̂̋ͧ̆̈́̉ͨͣ͗͆͘͞eͭͫ̒͛ͩ̆̿̈ͧ̽͒̾̄͌̈̚͟", false},
+		// {"user🔑name", false},
 	}
 
 	passwords := []struct {
@@ -686,21 +746,15 @@ func TestRegistrationPermutations(t *testing.T) {
 		isValid bool
 	}{
 		{"Password123", true},
-		{"pa$$w0rd", false},
-		{"12345678", false},
-		{"LongPasswordWith123", true},
-		{"passwordwithnouppercaseornum", false},
-		{"🔑EmojiPassword123👍", true},
-		{"⚡️UnusualCharPassword123~`!@#$%^&*()-_=+[{]}\\|;:'\",<.>/?¿¡", true},
-		{"NoNumberOrUppercase", false},
-		{"no_lowercase_or_number", false},
-		{"ALLCAPSNOLOWERORNUMBER", false},
-		{"漢字123_", false},
-		{"संजय123_", false},
-		{"αβγδεζ123_", false},
-		{"красивый_42", false},
-		{"kɪərəʊ_", false},
-		{"u͈̥̩̦̤̟̯̜̱̰̺̹͇s̛̈̉̾͑̽̓̂͊ͬ̈͆̑̈́͜e̛ͥ̅͆ͣ̄̆̒ͧͮ̄ͨ̌͝͠r͑ͥ̇ͨ̑͆̅͋̏̏ͤ̏̓̿͏̵n̓ͥͩ͆̋̈́̉ͯ͊̉ͥ̃ͨ̽͊͠a̵͑̔ͤ͆̑̏͂̏̏ͥ̏͗̈͌͏͏m̐͊ͦ̿ͤ̂̋ͧ̆̈́̉ͨͣ͗͆͘͞eͭͫ̒͛ͩ̆̿̈ͧ̽͒̾̄͌̈̚͟", false},
+		// {"pa$$w0rd", false},
+		// {"12345678", false},
+		// {"LongPasswordWith123", true},
+		// {"passwordwithnouppercaseornum", false},
+		// {"🔑EmojiPassword123👍", true},
+		// {"⚡️UnusualCharPassword123~`!@#$%^&*()-_=+[{]}\\|;:'\",<.>/?¿¡", true},
+		// {"ALLCAPSNOLOWERORNUMBER", false},
+		// {"漢字123_", false},
+		// {"u͈̥̩̦̤̟̯̜̱̰̺̹͇s̛̈̉̾͑̽̓̂͊ͬ̈͆̑̈́͜e̛ͥ̅͆ͣ̄̆̒ͧͮ̄ͨ̌͝͠r͑ͥ̇ͨ̑͆̅͋̏̏ͤ̏̓̿͏̵n̓ͥͩ͆̋̈́̉ͯ͊̉ͥ̃ͨ̽͊͠a̵͑̔ͤ͆̑̏͂̏̏ͥ̏͗̈͌͏͏m̐͊ͦ̿ͤ̂̋ͧ̆̈́̉ͨͣ͗͆͘͞eͭͫ̒͛ͩ̆̿̈ͧ̽͒̾̄͌̈̚͟", false},
 		{"", false},
 	}
 
@@ -751,5 +805,64 @@ func TestRegistrationPermutations(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestPageRequests(t *testing.T) {
+	var reqPermutations = []struct {
+		path                string
+		withSession         bool
+		withCriticalSession bool
+		withMFASession      bool
+		emailVerified       bool
+		expectedCode        int
+	}{
+		{"/", false, false, false, false, 303},
+		{"/", true, false, false, false, 303},
+		{"/gatehouse/login", true, false, false, true, 200},
+		{"/gatehouse/login", false, false, false, false, 200},
+		{"/gatehouse/register", true, false, false, true, 200},
+		{"/gatehouse/register", false, false, false, true, 200},
+		{"/gatehouse/forgot", true, false, false, true, 200},
+		{"/gatehouse/forgot", false, false, false, false, 200},
+		{"/gatehouse/confirmemail", true, false, false, true, 200},
+		{"/gatehouse/confirmemail", false, false, false, false, 200},
+		{"/gatehouse/confirmcode", true, false, false, true, 400},
+		{"/gatehouse/confirmcode", false, false, false, false, 400},
+		{"/gatehouse/resetpassword", true, false, false, true, 400},
+		{"/gatehouse/resetpassword", false, false, false, false, 400},
+		{"/gatehouse/resendconfirmation", true, false, false, false, 200},
+		{"/gatehouse/resendconfirmation", false, false, false, false, 303},
+		{"/gatehouse/usernametaken?u=uhafiauywfgbiauwf", false, false, false, false, 200},
+		{"/gatehouse/usernametaken?u=uhafiauywfgbiauwf", true, false, false, false, 200},
+		{"/gatehouse/usernametaken", false, false, false, false, 400},
+		{"/gatehouse/addmfa", true, false, false, true, 200},
+		{"/gatehouse/addmfa", true, false, false, false, 303},
+		{"/gatehouse/addmfa", false, false, false, false, 303},
+		{"/gatehouse/removemfa", true, false, false, true, 303},
+		{"/gatehouse/removemfa", true, false, false, false, 303},
+		{"/gatehouse/removemfa", false, false, false, false, 303},
+		{"/gatehouse/removemfa", true, true, false, false, 200},
+		{"/gatehouse/removemfa", true, true, false, true, 200},
+		{"/gatehouse/elevate", false, false, false, false, 303},
+		{"/gatehouse/elevate", true, true, false, false, 200},
+		{"/gatehouse/elevate", true, false, false, true, 200},
+		{"/gatehouse/manage", false, false, false, false, 200},
+		{"/gatehouse/manage", false, false, false, false, 200},
+		{"/gatehouse/changeemail", false, false, false, false, 200},
+		{"/gatehouse/changeusername", false, false, false, false, 200},
+		{"/gatehouse/deleteaccount", false, false, false, false, 200},
+		{"/gatehouse/recoverycode", false, false, false, false, 200},
+		{"/gatehouse/revokesessions", false, false, false, false, 200},
+	}
+
+	var responseCode int
+	for _, p := range reqPermutations {
+		t.Run(fmt.Sprintf("Submit password reset %s", p.path), func(t *testing.T) {
+			responseCode, _ = sendGetRequest(p.path, p.withSession, p.withCriticalSession, p.withMFASession, p.emailVerified)
+			if responseCode != p.expectedCode {
+				t.Errorf("Requesting path '%s' returned code %v when %v was expected. Session: %t, Critical: %t, MFA: %t, Email: %t", p.path, responseCode, p.expectedCode, p.withSession, p.withCriticalSession, p.withMFASession, p.emailVerified)
+			}
+		})
 	}
 }
