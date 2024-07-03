@@ -131,7 +131,7 @@ func HandleLogout(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_accounts WHERE session_token = ?", tablePrefix),sessionToken.Value)
+	_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_sessions WHERE session_token = ?", tablePrefix),sessionToken.Value)
 	if err != nil {
 		ServeErrorPage(response, err)
 		return
