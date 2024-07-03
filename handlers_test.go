@@ -1033,6 +1033,56 @@ func TestPageDatabaseFailure(t *testing.T) {
 
 }
 
+func TestDisabledFeatureRequests(t *testing.T) {
+	var reqPermutations = []struct {
+		path                string
+		withSession         bool
+		withCriticalSession bool
+		withMFASession      bool
+		emailVerified       bool
+		expectedCode        int
+	}{
+		{"/gatehouse/register", true, false, false, true, 410},
+		{"/gatehouse/forgot", true, false, false, true, 410},
+		{"/gatehouse/resetpassword", true, false, false, true, 410},
+		{"/gatehouse/addmfa", true, false, false, true, 410},
+		{"/gatehouse/removemfa", true, false, false, true, 410},
+		{"/gatehouse/changeemail", false, false, false, false, 410},
+		{"/gatehouse/changeusername", false, false, false, false, 410},
+		{"/gatehouse/deleteaccount", false, false, false, false, 410},
+		{"/gatehouse/recoverycode", false, false, false, false, 410},
+		{"/gatehouse/revokesessions", false, false, false, false, 410},
+	}
+
+	allowRegistration = false
+	allowUsernameLogin = false
+	allowPasswordReset = false
+	allowMobileMFA = false
+	allowUsernameChange = false
+	allowEmailChange = false
+	allowDeleteAccount = false
+	allowSessionRevoke = false
+
+	var responseCode int
+	for _, p := range reqPermutations {
+		t.Run(fmt.Sprintf("GET page %s", p.path), func(t *testing.T) {
+			responseCode, _ = sendGetRequest(p.path, p.withSession, p.withCriticalSession, p.withMFASession, p.emailVerified)
+			if responseCode != p.expectedCode {
+				t.Errorf("Requesting path '%s' returned code %v when %v was expected. Session: %t, Critical: %t, MFA: %t, Email: %t", p.path, responseCode, p.expectedCode, p.withSession, p.withCriticalSession, p.withMFASession, p.emailVerified)
+			}
+		})
+	}
+
+	allowRegistration     = envWithDefaultBool("ALLOW_REGISTRATION", true)
+	allowUsernameLogin    = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
+	allowPasswordReset    = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
+	allowMobileMFA        = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
+	allowUsernameChange   = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
+	allowEmailChange      = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
+	allowDeleteAccount    = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
+	allowSessionRevoke    = envWithDefaultBool("ALLOW_SESSION_REVOKE", true)
+}
+
 func TestPostRequests(t *testing.T) {
 
 	userId := GenerateRandomString(8)
@@ -1149,4 +1199,69 @@ func TestPostDatabaseFailure(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func TestPostDisabledFeatures(t *testing.T) {
+
+	userId := GenerateRandomString(8)
+	username := GenerateRandomString(16)
+	password := "ThisIsAQualityPassword123"
+	email := GenerateRandomString(16) + "@testing.local"
+	sessionToken := createDummySession(userId)
+	mfaSession := createDummyMFASession(userId)
+	elevatedSession := createDummyElevatedSession(userId)
+	validateDummyEmail(userId)
+
+	allowRegistration = false
+	allowUsernameLogin = false
+	allowPasswordReset = false
+	allowMobileMFA = false
+	allowUsernameChange = false
+	allowEmailChange = false
+	allowDeleteAccount = false
+	allowSessionRevoke = false
+
+	_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userId, username, email, HashPassword(password))
+	if err != nil {
+		panic(err)
+	}
+
+
+	var reqPermutations = []struct {
+		path                string
+		sessionToken        string
+		elevatedToken       string
+		MFAToken            string
+		expectedCode        int
+		formValues          []formFields
+	}{
+		{"/gatehouse/submit/login", "", "", "", 400, []formFields{{"username", username}, {"password", password}}},
+		{"/gatehouse/submit/register", "", "", "", 400, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/mfa", "", "", mfaSession, 400, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/validatemfa", sessionToken, "", "", 400, []formFields{{"otp", "123456"}}},
+		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 400, []formFields{{"newemail", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 400, []formFields{{"newUsername", GenerateRandomString(8)}}},
+		{"/gatehouse/submit/recoverycode", "", "", mfaSession, 400, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/revokesessions", sessionToken, elevatedSession, "", 400, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/deleteaccount", sessionToken, elevatedSession, "", 400, []formFields{}},
+	}
+
+	var responseCode int
+	for _, p := range reqPermutations {
+		t.Run(fmt.Sprintf("POST page %s", p.path), func(t *testing.T) {
+			responseCode, _ = sendPostRequest(p.path, p.sessionToken, p.elevatedToken, p.MFAToken, p.formValues)
+			if responseCode != p.expectedCode {
+				t.Errorf("Requesting path '%s' returned code %v when %v was expected.", p.path, responseCode, p.expectedCode)
+			}
+		})
+	}
+
+	allowRegistration     = envWithDefaultBool("ALLOW_REGISTRATION", true)
+	allowUsernameLogin    = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
+	allowPasswordReset    = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
+	allowMobileMFA        = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
+	allowUsernameChange   = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
+	allowEmailChange      = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
+	allowDeleteAccount    = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
+	allowSessionRevoke    = envWithDefaultBool("ALLOW_SESSION_REVOKE", true)
 }
