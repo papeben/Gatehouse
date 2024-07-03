@@ -276,12 +276,14 @@ func CreateDatabaseTable(tableSql string) {
 func ServePage(response http.ResponseWriter, pageStruct GatehouseForm) {
 	err := formTemplate.Execute(response, pageStruct)
 	if err != nil {
-		logMessage(1, fmt.Sprintf("Error rendering page: %s", err.Error()))
-		ServeErrorPage(response)
+		ServeErrorPage(response, err)
 	}
 }
 
-func ServeErrorPage(response http.ResponseWriter) {
+func ServeErrorPage(response http.ResponseWriter, err error) {
+	if err != nil {
+		logMessage(1, fmt.Sprintf("An internal error occurred: %s", err.Error()))
+	}
 	var errorPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - Error Occurred",
 		"Error Occurred",
@@ -297,7 +299,7 @@ func ServeErrorPage(response http.ResponseWriter) {
 		functionalPath,
 	}
 	response.WriteHeader(500)
-	err := formTemplate.Execute(response, errorPage)
+	err = formTemplate.Execute(response, errorPage)
 	if err != nil {
 		logMessage(1, fmt.Sprintf("Error rendering error page: %s", err.Error()))
 		fmt.Fprint(response, `Internal Error.`)

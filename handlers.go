@@ -20,34 +20,31 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 		emailConfirmed bool   = false
 		proxied        string = "Proxied"
 	)
-
-	handler := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load handler associated with URI from functionalURIs map
-	tokenCookie, tokenError := request.Cookie(sessionCookieName)
-
-	if tokenError == nil {
-		validSession, userId, userEmail, emailConfirmed = IsValidSessionWithInfo(tokenCookie.Value)
-		if !validSession {
-			logMessage(3, fmt.Sprintf("Client %s presented an invalid session token", request.RemoteAddr))
-			http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err != nil {
+		validSession = false
+	} else {
+		validSession, userId, userEmail, emailConfirmed, err = IsValidSessionWithInfo(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
 		}
 	}
+
+	handler := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load handler associated with URI from functionalURIs map
 	if handler != nil {
 		handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
 		proxied = "Served"
 	} else if requireEmailConfirm && validSession && !emailConfirmed {
 		http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
 		proxied = "Redirected"
-	} else if !requireAuthentication {
-		proxy.ServeHTTP(response, request)
-	} else if validSession && emailConfirmed {
-		proxy.ServeHTTP(response, request)
-	} else if sliceContainsPath(publicPageList, request.URL.Path) {
-		proxy.ServeHTTP(response, request)
+	} else if requireAuthentication && !validSession && !sliceContainsPath(publicPageList, request.URL.Path) {
+		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
+		proxied = "Redirected"
 	} else if request.URL.Path == "/" && sliceContainsPath(publicPageList, "//") {
 		proxy.ServeHTTP(response, request)
 	} else {
-		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
-		proxied = "Redirected"
+		proxy.ServeHTTP(response, request)
 	}
 
 	logMessage(4, fmt.Sprintf("%s(%s) (%s) %s %s %d %s %s", userId, userEmail, request.RemoteAddr, proxied, request.Proto, request.ContentLength, request.Method, request.RequestURI))
@@ -65,8 +62,20 @@ func sliceContainsPath(slice []string, path string) bool {
 }
 
 func HandleLogin(response http.ResponseWriter, request *http.Request) {
-	var innerForm = []GatehouseFormElement{}
+	var validSession = false
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+		}
+	}
+	if validSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "manage"), http.StatusSeeOther)
+		return
+	}
 
+	var innerForm = []GatehouseFormElement{}
 	if allowUsernameLogin {
 		innerForm = append(
 			innerForm,
@@ -115,6 +124,18 @@ func HandleLogin(response http.ResponseWriter, request *http.Request) {
 }
 
 func HandleLogout(response http.ResponseWriter, request *http.Request) {
+	sessionToken, err := request.Cookie(sessionCookieName)
+	if err != nil {
+		response.WriteHeader(410)
+		ServePage(response, linkExpired)
+		return
+	}
+
+	_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_accounts WHERE session_token = ?", tablePrefix),sessionToken.Value)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
 	http.SetCookie(response, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1})
 
 	var innerform = []GatehouseFormElement{}
@@ -156,17 +177,18 @@ func HandleRecoveryCode(response http.ResponseWriter, request *http.Request) {
 	mfaCookie, err := request.Cookie(mfaCookieName)
 	if err != nil {
 		http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
-	} else {
-		err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ? AND used = 0 AND type = 'totp'", tablePrefix), mfaCookie.Value).Scan(&userID)
-		if err == sql.ErrNoRows {
-			http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
-		} else if err != nil {
-			logMessage(1, fmt.Sprintf("Error connecting to database: %s", err.Error()))
-			ServeErrorPage(response)
-		} else {
-			ServePage(response, mfaRecoveryCodePage)
-		}
+		return
 	}
+
+	err = db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_mfa WHERE mfa_session = ? AND used = 0 AND type = 'totp'", tablePrefix), mfaCookie.Value).Scan(&userID)
+	if err == sql.ErrNoRows {
+		http.Redirect(response, request, "/"+functionalPath+"/login", http.StatusSeeOther)
+	} else if err != nil {
+		ServeErrorPage(response, err)
+	} else {
+		ServePage(response, mfaRecoveryCodePage)
+	}
+
 }
 
 func HandleConfirmEmail(response http.ResponseWriter, request *http.Request) {
@@ -174,51 +196,97 @@ func HandleConfirmEmail(response http.ResponseWriter, request *http.Request) {
 }
 
 func HandleRegister(response http.ResponseWriter, request *http.Request) {
-	if allowRegistration {
-		ServePage(response, registrationPage)
-	} else {
+	if !allowRegistration {
+		response.WriteHeader(410)
 		ServePage(response, disabledFeaturePage)
+		return
 	}
+
+	ServePage(response, registrationPage)
 }
 
 func HandleConfirmEmailCode(response http.ResponseWriter, request *http.Request) {
 	emailCode := request.URL.Query().Get("c")
-	if ConfirmEmailCode(emailCode) {
-		ServePage(response, confirmedEmailPage)
-	} else {
-		response.WriteHeader(400)
+	validCode, err := ConfirmEmailCode(emailCode)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	if !validCode {
+		response.WriteHeader(410)
 		ServePage(response, linkExpired)
 	}
+	ServePage(response, confirmedEmailPage)
 }
 
 func HandlePasswordResetCode(response http.ResponseWriter, request *http.Request) {
 	resetCode := request.URL.Query().Get("c")
-	if resetCode != "" && IsValidResetCode(resetCode) {
-		customResetPage := resetPage
-		customResetPage.FormAction += fmt.Sprintf("?c=%s", resetCode)
-		ServePage(response, customResetPage)
-	} else {
+	validResetCode, err := IsValidResetCode(resetCode)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	if !validResetCode {
 		response.WriteHeader(410)
 		ServePage(response, linkExpired)
+		return
 	}
+	customResetPage := resetPage
+	customResetPage.FormAction += fmt.Sprintf("?c=%s", resetCode)
+	ServePage(response, customResetPage)
 }
 
 func HandleResendConfirmation(response http.ResponseWriter, request *http.Request) {
 	tokenCookie, err := request.Cookie(sessionCookieName)
 	if err != nil {
 		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
-	} else if IsValidSession(tokenCookie.Value) && PendingEmailApproval(tokenCookie.Value) && ResendConfirmationEmail(tokenCookie.Value) {
+		return
+	}
+	var (
+		validSession bool = false
+		pendingEmail bool = false
+	)
+	validSession, err = IsValidSession(tokenCookie.Value)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	pendingEmail, err = PendingEmailApproval(tokenCookie.Value)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	if !validSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
+		return
+	}
+	if !pendingEmail {
+		response.WriteHeader(410)
+		ServePage(response, linkExpired)
+		return
+	}
+	emailSent, err := ResendConfirmationEmail(tokenCookie.Value)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	if emailSent {
 		ServePage(response, resendConfirmationPage)
-	} else if IsValidSession(tokenCookie.Value) && !PendingEmailApproval(tokenCookie.Value) {
-		http.Redirect(response, request, "/", http.StatusSeeOther)
 	} else {
-		response.WriteHeader(400)
+		response.WriteHeader(410)
 		ServePage(response, linkExpired)
 	}
 }
 
 func HandleIsUsernameTaken(response http.ResponseWriter, request *http.Request) {
-	if !IsValidNewUsername(strings.ToLower(request.URL.Query().Get("u"))) {
+	isValid, err := IsValidNewUsername(strings.ToLower(request.URL.Query().Get("u")))
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	if !isValid{
 		response.WriteHeader(400)
 		fmt.Fprint(response, `Username taken.`)
 	} else {
@@ -229,14 +297,19 @@ func HandleIsUsernameTaken(response http.ResponseWriter, request *http.Request) 
 
 func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 	if !allowMobileMFA {
+		response.WriteHeader(410)
 		ServePage(response, disabledFeaturePage)
 		return
 	}
 
-	sessionCookie, err := request.Cookie(sessionCookieName)
 	validSession := false
+	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 	if !validSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
@@ -258,7 +331,7 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
 		return
 	} else if err != nil {
-		ServeErrorPage(response)
+		ServeErrorPage(response, err)
 		logDbError(err)
 		return
 	} else if mfaType == "token" {
@@ -271,8 +344,7 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 		mfaSecret = GenerateOTPSecret()
 		_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_secret = ? WHERE id = ?", tablePrefix), mfaSecret, userID)
 		if err != nil {
-			ServeErrorPage(response)
-			logDbError(err)
+			ServeErrorPage(response, err)
 			return
 		}
 	} else {
@@ -282,7 +354,7 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 	otpUrl := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30", appName, email, mfaSecret, appName)
 	png, err = qrcode.Encode(otpUrl, qrcode.Medium, 256)
 	if err != nil {
-		ServeErrorPage(response)
+		ServeErrorPage(response, err)
 		logMessage(1, fmt.Sprintf("Failed to encode QRCode: %s", otpUrl))
 		return
 	}
@@ -313,7 +385,11 @@ func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	validSession := false
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
 	target := request.URL.Query().Get("t")
@@ -346,12 +422,20 @@ func HandleRemoveMFA(response http.ResponseWriter, request *http.Request) {
 
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
 	critialSessionCookie, err := request.Cookie(criticalCookieName)
 	if err == nil {
-		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+		validCriticalSession, err = IsValidCriticalSession(critialSessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
 	if !validSession {
@@ -364,13 +448,15 @@ func HandleRemoveMFA(response http.ResponseWriter, request *http.Request) {
 }
 
 func HandleManage(response http.ResponseWriter, request *http.Request) {
-	var (
-		validSession bool = false
-	)
+	var validSession bool = false
 
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
 	if !validSession {
@@ -390,8 +476,7 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
 		return
 	} else if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -463,39 +548,55 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 	err = dashTemplate.Execute(response, dashboardPage)
 	if err != nil {
 		logMessage(1, fmt.Sprintf("Error rendering dashboard page: %s", err.Error()))
-		ServeErrorPage(response)
+		ServeErrorPage(response, err)
 	}
 
 }
 
 func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
-	var (
-		validSession         bool = false
-		validCriticalSession bool = false
-	)
+	if !allowEmailChange {
+		response.WriteHeader(410)
+		ServePage(response, disabledFeaturePage)
+		return
+	}
 
+	var validSession         bool = false
+	var validCriticalSession bool = false
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	}
+	if !validSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
+		return
 	}
 
 	critialSessionCookie, err := request.Cookie(criticalCookieName)
 	if err == nil {
-		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+		validCriticalSession, err = IsValidCriticalSession(critialSessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	}
+	if !validCriticalSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeemail"), http.StatusSeeOther)
+		return
 	}
 
-	if !allowEmailChange {
-		ServePage(response, disabledFeaturePage)
-	} else if !validSession {
-		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
-	} else if !validCriticalSession {
-		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeemail"), http.StatusSeeOther)
-	} else {
-		ServePage(response, emailChangePage)
-	}
+	ServePage(response, emailChangePage)
 }
 
 func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
+	if !allowUsernameChange {
+		response.WriteHeader(410)
+		ServePage(response, disabledFeaturePage)
+		return
+	}
 	var (
 		userId               string
 		validSession         bool = false
@@ -504,21 +605,24 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
-	}
-
-	critialSessionCookie, err := request.Cookie(criticalCookieName)
-	if err == nil {
-		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
-	}
-
-	if !allowUsernameChange {
-		ServePage(response, disabledFeaturePage)
-		return
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 	if !validSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
 		return
+	}
+
+	critialSessionCookie, err := request.Cookie(criticalCookieName)
+	if err == nil {
+		validCriticalSession, err = IsValidCriticalSession(critialSessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 	if !validCriticalSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=changeusername"), http.StatusSeeOther)
@@ -529,8 +633,7 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 	if err == sql.ErrNoRows {
 		ServePage(response, usernameChangeBlockedPage)
 	} else if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	} else {
 		ServePage(response, usernameChangePage)
@@ -539,6 +642,11 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 }
 
 func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
+	if !allowDeleteAccount {
+		response.WriteHeader(410)
+		ServePage(response, disabledFeaturePage)
+		return
+	}
 	var (
 		validSession         bool = false
 		validCriticalSession bool = false
@@ -546,61 +654,72 @@ func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
 
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	}
+	if !validSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
+		return
 	}
 
 	critialSessionCookie, err := request.Cookie(criticalCookieName)
 	if err == nil {
-		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+		validCriticalSession, err = IsValidCriticalSession(critialSessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
-
-	if !allowDeleteAccount {
-		ServePage(response, disabledFeaturePage)
-	} else if !validSession {
-		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
-	} else if !validCriticalSession {
+	if !validCriticalSession {
 		http.Redirect(response, request, path.Join("/", functionalPath, "elevate?t=deleteaccount"), http.StatusSeeOther)
-	} else {
-		ServePage(response, deleteAccountPage)
+		return
 	}
+	ServePage(response, deleteAccountPage)
 }
 
 func HandleSessionRevoke(response http.ResponseWriter, request *http.Request) {
-	var (
-		validSession bool = false
-	)
+	if !allowSessionRevoke {
+		response.WriteHeader(410)
+		ServePage(response, disabledFeaturePage)
+		return
+	}
+	var validSession bool = false
 
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
-	}
-
-	if !allowSessionRevoke {
-		ServePage(response, disabledFeaturePage)
-	} else if !validSession {
-		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
-	} else {
-		var sessionRevokePage = GatehouseForm{
-			appName + " - Sign Out All Devices",
-			"Sign Out All Devices",
-			"/" + functionalPath + "/submit/revokesessions",
-			"POST",
-			[]GatehouseFormElement{
-				FormCreateDivider(),
-				FormCreateHint("Are you sure you wish to sign out all devices?"),
-				FormCreateDivider(),
-				FormCreateDangerSubmitInput("submit", "Sign Out"),
-				FormCreateDivider(),
-				FormCreateHint("Changed your mind?"),
-				FormCreateButtonLink("/"+functionalPath+"/manage", "Cancel"),
-				FormCreateDivider(),
-			},
-			[]OIDCButton{},
-			functionalPath,
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
 		}
-
-		ServePage(response, sessionRevokePage)
 	}
+	if !validSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
+		return
+	}
+	var sessionRevokePage = GatehouseForm{
+		appName + " - Sign Out All Devices",
+		"Sign Out All Devices",
+		"/" + functionalPath + "/submit/revokesessions",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Are you sure you wish to sign out all devices?"),
+			FormCreateDivider(),
+			FormCreateDangerSubmitInput("submit", "Sign Out"),
+			FormCreateDivider(),
+			FormCreateHint("Changed your mind?"),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Cancel"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	ServePage(response, sessionRevokePage)
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -617,8 +736,8 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 		mfaType        string
 	)
 	if !allowUsernameLogin {
-		response.WriteHeader(400)
-		fmt.Fprint(response, `400 - Feature Disabled.`)
+		response.WriteHeader(410)
+		fmt.Fprint(response, `410 - Feature Disabled.`)
 		return
 	}
 	if username == "" || password == "" {
@@ -632,8 +751,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 		http.Redirect(response, request, path.Join("/", functionalPath, "/login?error=invalid"), http.StatusSeeOther)
 		return
 	} else if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -655,8 +773,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 	// Begin multifactor session
 	sessionToken, err := GenerateMfaSessionToken()
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 	cookie := http.Cookie{Name: mfaCookieName, Value: sessionToken, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
@@ -666,8 +783,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 		mfaToken := GenerateRandomNumbers(6)
 		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "email", userID, mfaToken)
 		if err != nil {
-			ServeErrorPage(response)
-			logDbError(err)
+			ServeErrorPage(response, err)
 			return
 		}
 
@@ -681,7 +797,7 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 		)
 
 		if err != nil {
-			ServeErrorPage(response)
+			ServeErrorPage(response, err)
 			logMessage(2, fmt.Sprintf("User %s was not sent their email MFA code: %s", userID, err.Error()))
 		} else {
 			ServePage(response, mfaEmailPage)
@@ -690,13 +806,12 @@ func HandleSubLogin(response http.ResponseWriter, request *http.Request) {
 	} else if mfaType == "token" {
 		_, err := db.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), sessionToken, "totp", userID, "")
 		if err != nil {
-			ServeErrorPage(response)
-			logDbError(err)
+			ServeErrorPage(response, err)
 			return
 		}
 		ServePage(response, mfaTokenPage)
 	} else {
-		ServeErrorPage(response)
+		ServeErrorPage(response, nil)
 		logMessage(1, fmt.Sprintf("Unrecognised MFA type in database: %s", mfaType))
 	}
 }
@@ -708,51 +823,86 @@ func HandleSubRegister(response http.ResponseWriter, request *http.Request) {
 	passwordConfirm := request.FormValue("passwordConfirm")
 
 	if !allowRegistration {
-		response.WriteHeader(400)
-		fmt.Fprint(response, `400 - Feature Disabled.`)
-	} else if !IsValidNewUsername(username) {
+		response.WriteHeader(410)
+		fmt.Fprint(response, `410 - Feature Disabled.`)
+		return
+	}
+	validUsername, err := IsValidNewUsername(username)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	if !validUsername {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid Username.`)
-	} else if !IsValidNewEmail(email) {
+		return
+	}
+	validEmail, err := IsValidNewEmail(email)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	if !validEmail {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid email.`)
-	} else if !IsValidPassword(password) {
+		return
+	}
+	if !IsValidPassword(password) {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid Password.`)
-	} else if password != passwordConfirm {
+		return
+	}
+	if password != passwordConfirm {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Passwords did not match.`)
-	} else {
-		userID, err := GenerateUserID()
-		if err != nil {
-			ServeErrorPage(response)
-			logDbError(err)
-			return
-		}
-		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userID, username, email, HashPassword(password))
-		if err != nil {
-			ServeErrorPage(response)
-			logDbError(err)
-			return
-		}
-		SendEmailConfirmationCode(userID, email, username)
-		AuthenticateRequestor(response, request, userID)
+		return
 	}
+	userID, err := GenerateUserID()
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userID, username, email, HashPassword(password))
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	err = SendEmailConfirmationCode(userID, email, username)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	AuthenticateRequestor(response, request, userID)
+
 }
 
 func HandleSubResetRequest(response http.ResponseWriter, request *http.Request) {
 	email := request.FormValue("email")
 	if !allowPasswordReset {
-		response.WriteHeader(400)
-		fmt.Fprint(response, `400 - Feature Disabled.`)
-	} else if ResetPasswordRequest(email) {
-		ServePage(response, resetSentPage)
-	} else {
+		response.WriteHeader(410)
+		fmt.Fprint(response, `410 - Feature Disabled.`)
+		return
+	}
+	emailExists, err := ResetPasswordRequest(email)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	if !emailExists {
 		ServePage(response, resetNotSentPage)
 	}
+	ServePage(response, resetSentPage)
 }
 
 func HandleSubReset(response http.ResponseWriter, request *http.Request) {
+	if !allowPasswordReset {
+		response.WriteHeader(410)
+		fmt.Fprint(response, `410 - Feature Disabled.`)
+		return
+	}
+
 	code := request.URL.Query().Get("c")
 	password := request.FormValue("password")
 	passwordConfirm := request.FormValue("passwordConfirm")
@@ -770,15 +920,13 @@ func HandleSubReset(response http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(response, `403 - Unauthorized.`)
 		return
 	} else if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
 	_, err = db.Exec(fmt.Sprintf("UPDATE %s_resets INNER JOIN %s_accounts ON user_id = id SET password = ?, used = 1 WHERE reset_token = ?", tablePrefix, tablePrefix), HashPassword(password), code)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 	ServePage(response, resetSuccessPage)
@@ -807,8 +955,7 @@ func HandleSubOTP(response http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(response, `Invalid request.`)
 		return
 	} else if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -833,6 +980,12 @@ func HandleSubOTP(response http.ResponseWriter, request *http.Request) {
 }
 
 func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
+	if !allowMobileMFA {
+		response.WriteHeader(410)
+		ServePage(response, disabledFeaturePage)
+		return
+	}
+
 	var (
 		submitOtp    string = request.FormValue("otp")
 		mfaSecret    string
@@ -841,16 +994,15 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 		username     string
 		validSession bool = false
 	)
+
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
-
-	if !allowMobileMFA {
-		ServePage(response, disabledFeaturePage)
-		return
-	}
-
 	if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
@@ -863,15 +1015,13 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(response, `Invalid Request.`)
 		return
 	} else if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
 	otp, err := GenerateOTP(mfaSecret, 30)
 	if err != nil {
-		ServeErrorPage(response)
-		logMessage(1, fmt.Sprintf("Failed to generate OTP: %s", err.Error()))
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -883,8 +1033,7 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 
 	_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_type = 'token' WHERE id = ?", tablePrefix), userID)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -894,8 +1043,7 @@ func HandleSubMFAValidate(response http.ResponseWriter, request *http.Request) {
 		recoveryCodes = recoveryCodes + "<br>" + recoveryCode
 		_, err = db.Exec(fmt.Sprintf("INSERT IGNORE INTO %s_recovery (user_id, code) VALUES (?, ?)", tablePrefix), userID, recoveryCode)
 		if err != nil {
-			ServeErrorPage(response)
-			logDbError(err)
+			ServeErrorPage(response, err)
 			return
 		}
 	}
@@ -938,18 +1086,22 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 		userID       string
 		validSession bool = false
 	)
+
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
-
-	target := request.URL.Query().Get("t")
-
 	if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 		return
 	}
+
+	target := request.URL.Query().Get("t")
 	if target == "" {
 		response.WriteHeader(400)
 		fmt.Fprintf(response, "Target required.")
@@ -963,8 +1115,7 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 
 	err = db.QueryRow(fmt.Sprintf("SELECT id, password FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&userID, &passwordHash)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -975,15 +1126,13 @@ func HandleSubElevate(response http.ResponseWriter, request *http.Request) {
 
 	elevatedSessionToken, err := GenerateSessionToken()
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id, critical) VALUES (?, ?, 1)", tablePrefix), elevatedSessionToken, userID)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -1005,12 +1154,20 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
 	critialSessionCookie, err := request.Cookie(criticalCookieName)
 	if err == nil {
-		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+		validCriticalSession, err = IsValidCriticalSession(critialSessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
 	if !validSession {
@@ -1026,14 +1183,12 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 
 	err = db.QueryRow(fmt.Sprintf("SELECT id, mfa_type FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionCookie.Value).Scan(&sessionUserID, &mfaType)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 	err = db.QueryRow(fmt.Sprintf("SELECT id, email, username FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ? AND critical = 1", tablePrefix, tablePrefix), critialSessionCookie.Value).Scan(&criticalUserID, &email, &username)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -1052,8 +1207,7 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 
 	_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET mfa_type = 'email', mfa_secret = NULL WHERE id = ?", tablePrefix), sessionUserID)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -1068,6 +1222,12 @@ func HandleSubRemoveMFA(response http.ResponseWriter, request *http.Request) {
 }
 
 func HandleSubEmailChange(response http.ResponseWriter, request *http.Request) {
+	if !allowEmailChange {
+		response.WriteHeader(410)
+		fmt.Fprint(response, `Feature disabled.`)
+		return
+	}
+
 	var (
 		validSession         bool = false
 		validCriticalSession bool = false
@@ -1080,25 +1240,33 @@ func HandleSubEmailChange(response http.ResponseWriter, request *http.Request) {
 
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
 	critialSessionCookie, err := request.Cookie(criticalCookieName)
 	if err == nil {
-		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+		validCriticalSession, err = IsValidCriticalSession(critialSessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
-	if !allowEmailChange {
-		response.WriteHeader(400)
-		fmt.Fprint(response, `Feature disabled.`)
-		return
-	}
 	if !validSession || !validCriticalSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 		return
 	}
-	if !IsValidNewEmail(email) {
+	validEmail, err := IsValidNewEmail(email)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	if !validEmail {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid email.`)
 		return
@@ -1109,23 +1277,31 @@ func HandleSubEmailChange(response http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(response, `Invalid request.`)
 		return
 	} else if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 	_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email = ?, email_confirmed = 0, email_resent = 0 WHERE id = ?", tablePrefix), email, userID)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
-	SendEmailConfirmationCode(userID, email, username)
+	err = SendEmailConfirmationCode(userID, email, username)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
 	ServePage(response, confirmEmailPage)
 
 }
 
 func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request) {
+	if !allowUsernameChange {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Feature disabled.`)
+		return
+	}
+
 	var (
 		validSession         bool = false
 		validCriticalSession bool = false
@@ -1138,25 +1314,33 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
 	critialSessionCookie, err := request.Cookie(criticalCookieName)
 	if err == nil {
-		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
+		validCriticalSession, err = IsValidCriticalSession(critialSessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
-	if !allowUsernameChange {
-		response.WriteHeader(400)
-		fmt.Fprint(response, `Feature disabled.`)
-		return
-	}
 	if !validSession || !validCriticalSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
 		return
 	}
-	if !IsValidNewUsername(username) {
+	validUsername, err := IsValidNewUsername(username)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	if !validUsername {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `400 - Invalid username.`)
 		return
@@ -1168,15 +1352,13 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 		fmt.Fprint(response, `Invalid request.`)
 		return
 	} else if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
 	_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET username = ?, username_changed = CURRENT_TIMESTAMP WHERE id = ? AND username_changed < CURRENT_TIMESTAMP - INTERVAL 30 DAY", tablePrefix), username, userID)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -1189,6 +1371,12 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 }
 
 func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request) {
+	if !allowDeleteAccount {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Feature Disabled.`)
+		return
+	}
+
 	var (
 		validSession         bool = false
 		validCriticalSession bool = false
@@ -1198,17 +1386,20 @@ func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request)
 
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
 	critialSessionCookie, err := request.Cookie(criticalCookieName)
 	if err == nil {
-		validCriticalSession = IsValidCriticalSession(critialSessionCookie.Value)
-	}
-	if !allowDeleteAccount {
-		response.WriteHeader(400)
-		fmt.Fprint(response, `Feature Disabled.`)
-		return
+		validCriticalSession, err = IsValidCriticalSession(critialSessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
 	if !validSession || !validCriticalSession {
@@ -1222,15 +1413,13 @@ func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request)
 		response.WriteHeader(400)
 		fmt.Fprint(response, `Invalid request.`)
 	} else if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
 	_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_accounts WHERE id = ?", tablePrefix), userID)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -1254,15 +1443,13 @@ func HandleSubRecoveryCode(response http.ResponseWriter, request *http.Request) 
 		http.Redirect(response, request, "/"+functionalPath+"/login?error=invalid", http.StatusSeeOther)
 		return
 	} else if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
 	_, err = db.Exec(fmt.Sprintf("UPDATE %s_recovery SET used = 1 WHERE user_id = ? AND code = ?", tablePrefix), userID, recoveryToken)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
@@ -1271,6 +1458,12 @@ func HandleSubRecoveryCode(response http.ResponseWriter, request *http.Request) 
 }
 
 func HandleSubSessionRevoke(response http.ResponseWriter, request *http.Request) {
+	if !allowSessionRevoke {
+		response.WriteHeader(400)
+		fmt.Fprint(response, `Feature Disabled.`)
+		return
+	}
+
 	var (
 		validSession bool = false
 		userID       string
@@ -1278,14 +1471,13 @@ func HandleSubSessionRevoke(response http.ResponseWriter, request *http.Request)
 
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
-		validSession = IsValidSession(sessionCookie.Value)
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
 	}
 
-	if !allowSessionRevoke {
-		response.WriteHeader(400)
-		fmt.Fprint(response, `Feature Disabled.`)
-		return
-	}
 	if !validSession {
 		response.WriteHeader(403)
 		fmt.Fprint(response, `Unauthorized.`)
@@ -1298,15 +1490,13 @@ func HandleSubSessionRevoke(response http.ResponseWriter, request *http.Request)
 		fmt.Fprint(response, `Invalid request.`)
 		return
 	} else if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 
 	_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_sessions WHERE user_id = ?", tablePrefix), userID)
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 

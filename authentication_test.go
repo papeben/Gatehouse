@@ -40,7 +40,7 @@ func TestIsValidSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error inserting session token into database: %v", err)
 	}
-	valid := IsValidSession(sessionToken)
+	valid, _ := IsValidSession(sessionToken)
 	if !valid {
 		t.Errorf("Expected IsValidSession to return true for valid session token %s, but it returned false", sessionToken)
 	}
@@ -50,7 +50,7 @@ func TestIsValidSession(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	valid = IsValidSession(sessionToken)
+	valid, err = IsValidSession(sessionToken)
 	if valid {
 		t.Errorf("Expected IsValidSession to return false for invalid session token %s, but it returned true", sessionToken)
 	}
@@ -86,7 +86,7 @@ func TestPendingEmailApproval(t *testing.T) {
 	}
 
 	// Check that PendingEmailApproval returns true for the test user's session
-	pending := PendingEmailApproval(session)
+	pending, _ := PendingEmailApproval(session)
 	if !pending {
 		t.Errorf("Expected PendingEmailApproval to return true for session with unconfirmed email, but it returned false")
 	}
@@ -98,7 +98,7 @@ func TestPendingEmailApproval(t *testing.T) {
 	}
 
 	// Check that PendingEmailApproval returns false for the test user's session after email confirmation
-	pending = PendingEmailApproval(session)
+	pending, _ = PendingEmailApproval(session)
 	if pending {
 		t.Errorf("Expected PendingEmailApproval to return false for session with confirmed email, but it returned true")
 	}
@@ -134,7 +134,7 @@ func TestConfirmEmailCode(t *testing.T) {
 	}
 
 	// call the function
-	result := ConfirmEmailCode(code)
+	result, _ := ConfirmEmailCode(code)
 
 	// check the result
 	if !result {
@@ -142,7 +142,7 @@ func TestConfirmEmailCode(t *testing.T) {
 	}
 
 	// call the function again
-	result = ConfirmEmailCode(code)
+	result, _ = ConfirmEmailCode(code)
 
 	// check the result
 	if result {
@@ -192,7 +192,7 @@ func TestResetPasswordRequest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error inserting test user into database: %v", err)
 		}
-		result := ResetPasswordRequest(email)
+		result, _ := ResetPasswordRequest(email)
 		if !result {
 			t.Error("Reset email failed to send.")
 		}
@@ -200,7 +200,7 @@ func TestResetPasswordRequest(t *testing.T) {
 
 	t.Run("don't send main to unregistered user unregistered@testing.local", func(t *testing.T) {
 		email := "unregistered@example.local"
-		result := ResetPasswordRequest(email)
+		result, _ := ResetPasswordRequest(email)
 		if result {
 			t.Error("Shouldn't have sent to unregistered email address.")
 		}
@@ -230,7 +230,7 @@ func TestIsValidResetCode(t *testing.T) {
 	}
 
 	// call the function with a valid code
-	result := IsValidResetCode(code)
+	result, _ := IsValidResetCode(code)
 
 	// check the result
 	if !result {
@@ -242,7 +242,7 @@ func TestIsValidResetCode(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	result = IsValidResetCode(invalidCode)
+	result, _ = IsValidResetCode(invalidCode)
 
 	// check the result
 	if result {
@@ -268,7 +268,7 @@ func TestUsernamePermutations(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("Username '%s'", test.username), func(t *testing.T) {
 
-			actual := IsValidNewUsername(test.username)
+			actual, _ := IsValidNewUsername(test.username)
 			if actual != test.expected {
 				t.Errorf("Expected IsValidNewUsername('%s') to be %v, but got %v", test.username, test.expected, actual)
 			}
@@ -322,7 +322,7 @@ func TestEmailPermutations(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("Email '%s'", test.email), func(t *testing.T) {
 
-			actual := IsValidNewEmail(test.email)
+			actual, _ := IsValidNewEmail(test.email)
 			if actual != test.expected {
 				t.Errorf("Expected IsValidNewEmail('%s') to be %v, but got %v", test.email, test.expected, actual)
 			}
