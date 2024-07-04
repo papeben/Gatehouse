@@ -100,7 +100,7 @@ func createDummyUser() string {
 	}
 	defer tempDb.Close()
 
-	_, err = tempDb.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password) VALUES (?, ?, ?, ?)", tablePrefix), userId, username, email, HashPassword(password))
+	_, err = tempDb.Exec(fmt.Sprintf("INSERT INTO %s_accounts (id, username, email, password, username_changed) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP - INTERVAL 31 DAY)", tablePrefix), userId, username, email, HashPassword(password))
 	if err != nil {
 		panic(err)
 	}
@@ -302,7 +302,7 @@ func TestRegistrationFlow(t *testing.T) {
 		handler := http.HandlerFunc(HandleMain)
 		handler.ServeHTTP(recorder, req)
 
-		if recorder.Code != http.StatusBadRequest {
+		if recorder.Code != http.StatusGone {
 			fmt.Println(recorder.Body)
 			t.Errorf("Expected %v, got %v", http.StatusBadRequest, recorder.Code)
 		}
@@ -352,9 +352,9 @@ func TestRegistrationFlow(t *testing.T) {
 		handler = http.HandlerFunc(HandleMain)
 		handler.ServeHTTP(recorder, req)
 
-		if recorder.Code != http.StatusBadRequest {
+		if recorder.Code != http.StatusGone {
 			fmt.Println(recorder.Body)
-			t.Errorf("Expected OK, got %v", recorder.Code)
+			t.Errorf("Expected Gone, got %v", recorder.Code)
 		}
 	})
 
@@ -611,32 +611,6 @@ func TestRegistrationFlow(t *testing.T) {
 		}
 	})
 
-	t.Run("Sign out", func(t *testing.T) {
-
-		req, err := http.NewRequest("GET", path.Join("/", functionalPath, "logout"), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		recorder := httptest.NewRecorder()
-		handler := http.HandlerFunc(HandleMain)
-		handler.ServeHTTP(recorder, req)
-
-		if recorder.Code != http.StatusOK {
-			fmt.Println(recorder.Body)
-			t.Errorf("Expected ok, got %v", recorder.Code)
-		}
-
-		returnedCookies := recorder.Result().Cookies()
-		if len(returnedCookies) != 1 || returnedCookies[0].Name != sessionCookieName {
-			t.Errorf("Expected a session cookie, but didn't get one")
-		} else if returnedCookies[0].Value != "" {
-			t.Errorf("Expected a blank session cookie, but it had a value.")
-		} else if returnedCookies[0].MaxAge != -1 {
-			t.Errorf("Expected a MaxAge of -1")
-		}
-	})
-
 	t.Run("Get forgot password page", func(t *testing.T) {
 		req, err := http.NewRequest("GET", path.Join("/"+functionalPath+"/forgot"), nil)
 		if err != nil {
@@ -772,6 +746,34 @@ func TestRegistrationFlow(t *testing.T) {
 			t.Errorf("Expected %v, got %v", http.StatusOK, recorder.Code)
 		}
 	})
+
+	t.Run("Sign out", func(t *testing.T) {
+
+		req, err := http.NewRequest("GET", path.Join("/", functionalPath, "logout"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken})
+
+		recorder := httptest.NewRecorder()
+		handler := http.HandlerFunc(HandleMain)
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusOK {
+			fmt.Println(recorder.Body)
+			t.Errorf("Expected ok, got %v", recorder.Code)
+		}
+
+		returnedCookies := recorder.Result().Cookies()
+		if len(returnedCookies) != 1 || returnedCookies[0].Name != sessionCookieName {
+			t.Errorf("Expected a session cookie, but didn't get one")
+		} else if returnedCookies[0].Value != "" {
+			t.Errorf("Expected a blank session cookie, but it had a value.")
+		} else if returnedCookies[0].MaxAge != -1 {
+			t.Errorf("Expected a MaxAge of -1")
+		}
+	})
+
 }
 
 func TestRegistrationPermutations(t *testing.T) {
@@ -893,7 +895,7 @@ func TestPageRequests(t *testing.T) {
 	}{
 		{"/", false, false, false, false, 303},
 		{"/", true, false, false, false, 303},
-		{"/gatehouse/login", true, false, false, true, 200},
+		{"/gatehouse/login", true, false, false, true, 303},
 		{"/gatehouse/login", false, false, false, false, 200},
 		{"/gatehouse/register", true, false, false, true, 200},
 		{"/gatehouse/register", false, false, false, true, 200},
@@ -901,8 +903,8 @@ func TestPageRequests(t *testing.T) {
 		{"/gatehouse/forgot", false, false, false, false, 200},
 		{"/gatehouse/confirmemail", true, false, false, true, 200},
 		{"/gatehouse/confirmemail", false, false, false, false, 200},
-		{"/gatehouse/confirmcode", true, false, false, true, 400},
-		{"/gatehouse/confirmcode", false, false, false, false, 400},
+		{"/gatehouse/confirmcode", true, false, false, true, 410},
+		{"/gatehouse/confirmcode", false, false, false, false, 410},
 		{"/gatehouse/resetpassword", true, false, false, true, 410},
 		{"/gatehouse/resetpassword", false, false, false, false, 410},
 		{"/gatehouse/resendconfirmation", true, false, false, false, 200},
@@ -962,20 +964,20 @@ func TestPageDatabaseFailure(t *testing.T) {
 		emailVerified       bool
 		expectedCode        int
 	}{
-		{"/", false, false, false, false, 500},
+		{"/", false, false, false, false, 303},
 		{"/", true, false, false, false, 500},
-		{"/gatehouse/login", true, false, false, true, 200},
+		{"/gatehouse/login", true, false, false, true, 500},
 		{"/gatehouse/login", false, false, false, false, 200},
-		{"/gatehouse/register", true, false, false, true, 200},
+		{"/gatehouse/register", true, false, false, true, 500},
 		{"/gatehouse/register", false, false, false, true, 200},
-		{"/gatehouse/forgot", true, false, false, true, 200},
+		{"/gatehouse/forgot", true, false, false, true, 500},
 		{"/gatehouse/forgot", false, false, false, false, 200},
-		{"/gatehouse/confirmemail", true, false, false, true, 200},
+		{"/gatehouse/confirmemail", true, false, false, true, 500},
 		{"/gatehouse/confirmemail", false, false, false, false, 200},
-		{"/gatehouse/confirmcode", true, false, false, true, 400},
-		{"/gatehouse/confirmcode", false, false, false, false, 400},
-		{"/gatehouse/resetpassword", true, false, false, true, 410},
-		{"/gatehouse/resetpassword", false, false, false, false, 410},
+		{"/gatehouse/confirmcode", true, false, false, true, 500},
+		{"/gatehouse/confirmcode", false, false, false, false, 500},
+		{"/gatehouse/resetpassword", true, false, false, true, 500},
+		{"/gatehouse/resetpassword", false, false, false, false, 500},
 		{"/gatehouse/resendconfirmation", true, false, false, false, 500},
 		{"/gatehouse/resendconfirmation", false, false, false, false, 303},
 		{"/gatehouse/usernametaken?u=uhafiauywfgbiauwf", false, false, false, false, 500},
@@ -983,33 +985,33 @@ func TestPageDatabaseFailure(t *testing.T) {
 		{"/gatehouse/usernametaken", false, false, false, false, 400},
 		{"/gatehouse/addmfa", true, false, false, true, 500},
 		{"/gatehouse/addmfa", true, false, false, false, 500},
-		{"/gatehouse/addmfa", false, false, false, false, 500},
+		{"/gatehouse/addmfa", false, false, false, false, 303},
 		{"/gatehouse/removemfa", true, false, false, true, 500},
 		{"/gatehouse/removemfa", true, false, false, false, 500},
-		{"/gatehouse/removemfa", false, false, false, false, 500},
+		{"/gatehouse/removemfa", false, false, false, false, 303},
 		{"/gatehouse/removemfa", true, true, false, false, 500},
-		{"/gatehouse/elevate", false, false, false, false, 500},
+		{"/gatehouse/elevate", false, false, false, false, 303},
 		{"/gatehouse/elevate", true, false, false, true, 500},
 		{"/gatehouse/elevate?t=removemfa", true, true, false, false, 500},
 		{"/gatehouse/elevate?t=removemfa", true, false, false, true, 500},
-		{"/gatehouse/elevate?t=removemfa", false, false, false, false, 500},
+		{"/gatehouse/elevate?t=removemfa", false, false, false, false, 303},
 		{"/gatehouse/elevate?t=notarealfunc", true, false, false, true, 500},
-		{"/gatehouse/manage", false, false, false, false, 500},
+		{"/gatehouse/manage", false, false, false, false, 303},
 		{"/gatehouse/manage", true, false, false, false, 500},
 		{"/gatehouse/manage", true, false, false, true, 500},
-		{"/gatehouse/changeemail", false, false, false, false, 500},
+		{"/gatehouse/changeemail", false, false, false, false, 303},
 		{"/gatehouse/changeemail", true, false, false, false, 500},
 		{"/gatehouse/changeemail", true, true, false, false, 500},
-		{"/gatehouse/changeusername", false, false, false, false, 500},
+		{"/gatehouse/changeusername", false, false, false, false, 303},
 		{"/gatehouse/changeusername", true, false, false, true, 500},
 		{"/gatehouse/changeusername", true, true, false, true, 500},
-		{"/gatehouse/deleteaccount", false, false, false, false, 500},
+		{"/gatehouse/deleteaccount", false, false, false, false, 303},
 		{"/gatehouse/deleteaccount", true, false, false, true, 500},
 		{"/gatehouse/deleteaccount", true, true, false, true, 500},
-		{"/gatehouse/recoverycode", false, false, false, false, 500},
+		{"/gatehouse/recoverycode", false, false, false, false, 303},
 		{"/gatehouse/recoverycode", true, false, false, true, 500},
 		{"/gatehouse/recoverycode", true, false, true, true, 500},
-		{"/gatehouse/revokesessions", false, false, false, false, 500},
+		{"/gatehouse/revokesessions", false, false, false, false, 303},
 		{"/gatehouse/revokesessions", true, false, false, true, 500},
 	}
 
@@ -1128,7 +1130,8 @@ func TestPostRequests(t *testing.T) {
 		{"/gatehouse/submit/elevate?t=changeusername", sessionToken, "", "", 303, []formFields{{"password", password}}},
 		{"/gatehouse/submit/removemfa", sessionToken, elevatedSession, "", 400, []formFields{{"password", password}}},
 		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 200, []formFields{{"newemail", GenerateRandomString(16)+"@testing.local"}}},
-		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 200, []formFields{{"newUsername", GenerateRandomString(8)}}},
+		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 400, []formFields{{"newUsername", "invalid%username"}}},
+		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 400, []formFields{{"newUsername", GenerateRandomString(8)}}},
 		{"/gatehouse/submit/recoverycode", "", "", mfaSession, 303, []formFields{{"token", "123456"}}},
 		{"/gatehouse/submit/revokesessions", sessionToken, elevatedSession, "", 200, []formFields{{"token", "123456"}}},
 		{"/gatehouse/submit/deleteaccount", deletedSessionToken, deletedElevatedSession, "", 200, []formFields{}},
@@ -1171,9 +1174,9 @@ func TestPostDatabaseFailure(t *testing.T) {
 		expectedCode        int
 		formValues          []formFields
 	}{
-		{"/gatehouse/submit/login", "", "", "", 500, []formFields{{"username", username}, {"password", password}}},
-		{"/gatehouse/submit/register", "", "", "", 500, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@testing.local"}}},
-		{"/gatehouse/submit/mfa", "", "", mfaSession, 500, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/login", sessionToken, "", "", 500, []formFields{{"username", username}, {"password", password}}},
+		{"/gatehouse/submit/register", sessionToken, "", "", 500, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/mfa", sessionToken, "", mfaSession, 500, []formFields{{"token", "123456"}}},
 		{"/gatehouse/submit/validatemfa", sessionToken, "", "", 500, []formFields{{"otp", "123456"}}},
 		{"/gatehouse/submit/elevate?t=changeusername", sessionToken, "", "", 500, []formFields{{"password", password}}},
 		{"/gatehouse/submit/elevate?t=changeusername", sessionToken, "", "", 500, []formFields{{"password", password}}},
@@ -1235,15 +1238,15 @@ func TestPostDisabledFeatures(t *testing.T) {
 		expectedCode        int
 		formValues          []formFields
 	}{
-		{"/gatehouse/submit/login", "", "", "", 400, []formFields{{"username", username}, {"password", password}}},
-		{"/gatehouse/submit/register", "", "", "", 400, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@testing.local"}}},
-		{"/gatehouse/submit/mfa", "", "", mfaSession, 400, []formFields{{"token", "123456"}}},
-		{"/gatehouse/submit/validatemfa", sessionToken, "", "", 400, []formFields{{"otp", "123456"}}},
-		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 400, []formFields{{"newemail", GenerateRandomString(16)+"@testing.local"}}},
-		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 400, []formFields{{"newUsername", GenerateRandomString(8)}}},
-		{"/gatehouse/submit/recoverycode", "", "", mfaSession, 400, []formFields{{"token", "123456"}}},
-		{"/gatehouse/submit/revokesessions", sessionToken, elevatedSession, "", 400, []formFields{{"token", "123456"}}},
-		{"/gatehouse/submit/deleteaccount", sessionToken, elevatedSession, "", 400, []formFields{}},
+		{"/gatehouse/submit/login", "", "", "", 410, []formFields{{"username", username}, {"password", password}}},
+		{"/gatehouse/submit/register", "", "", "", 410, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/mfa", "", "", mfaSession, 303, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/validatemfa", sessionToken, "", "", 410, []formFields{{"otp", "123456"}}},
+		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 410, []formFields{{"newemail", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 410, []formFields{{"newUsername", GenerateRandomString(8)}}},
+		{"/gatehouse/submit/recoverycode", "", "", mfaSession, 410, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/revokesessions", sessionToken, elevatedSession, "", 410, []formFields{{"token", "123456"}}},
+		{"/gatehouse/submit/deleteaccount", sessionToken, elevatedSession, "", 410, []formFields{}},
 	}
 
 	var responseCode int

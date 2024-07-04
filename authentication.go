@@ -55,7 +55,7 @@ func IsValidSession(sessionToken string) (bool, error) {
 		logMessage(5, "Invalid session token presented")
 		return false, nil
 	} else if err != nil {
-		logDbError(err)
+		logMessage(1, err.Error())
 		return false, err
 	} else {
 		return true, nil

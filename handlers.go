@@ -167,10 +167,20 @@ func HandleLogout(response http.ResponseWriter, request *http.Request) {
 }
 
 func HandleForgotPassword(response http.ResponseWriter, request *http.Request) {
+	if !allowPasswordReset {
+		response.WriteHeader(410)
+		ServePage(response, disabledFeaturePage)
+		return
+	}
 	ServePage(response, forgotPasswordPage)
 }
 
 func HandleRecoveryCode(response http.ResponseWriter, request *http.Request) {
+	if !allowMobileMFA {
+		response.WriteHeader(410)
+		ServePage(response, disabledFeaturePage)
+		return
+	}
 	var (
 		userID string
 	)
@@ -215,6 +225,7 @@ func HandleConfirmEmailCode(response http.ResponseWriter, request *http.Request)
 	if !validCode {
 		response.WriteHeader(410)
 		ServePage(response, linkExpired)
+		return
 	}
 	ServePage(response, confirmedEmailPage)
 }
@@ -332,7 +343,7 @@ func HandleAddMFA(response http.ResponseWriter, request *http.Request) {
 		return
 	} else if err != nil {
 		ServeErrorPage(response, err)
-		logDbError(err)
+		logMessage(1, err.Error())
 		return
 	} else if mfaType == "token" {
 		response.WriteHeader(400)
@@ -415,6 +426,11 @@ func HandleElevateSession(response http.ResponseWriter, request *http.Request) {
 }
 
 func HandleRemoveMFA(response http.ResponseWriter, request *http.Request) {
+	if !allowMobileMFA {
+		response.WriteHeader(410)
+		ServePage(response, disabledFeaturePage)
+		return
+	}
 	var (
 		validSession         bool = false
 		validCriticalSession bool = false
@@ -974,7 +990,7 @@ func HandleSubOTP(response http.ResponseWriter, request *http.Request) {
 
 	_, err = db.Exec(fmt.Sprintf("UPDATE %s_mfa SET used = 1 WHERE mfa_session = ?", tablePrefix), mfaSession.Value)
 	if err != nil {
-		logDbError(err)
+		logMessage(1, err.Error())
 	}
 
 }
@@ -1297,7 +1313,7 @@ func HandleSubEmailChange(response http.ResponseWriter, request *http.Request) {
 
 func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request) {
 	if !allowUsernameChange {
-		response.WriteHeader(400)
+		response.WriteHeader(410)
 		fmt.Fprint(response, `Feature disabled.`)
 		return
 	}
@@ -1372,7 +1388,7 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 
 func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request) {
 	if !allowDeleteAccount {
-		response.WriteHeader(400)
+		response.WriteHeader(410)
 		fmt.Fprint(response, `Feature Disabled.`)
 		return
 	}
@@ -1428,6 +1444,11 @@ func HandleSubDeleteAccount(response http.ResponseWriter, request *http.Request)
 }
 
 func HandleSubRecoveryCode(response http.ResponseWriter, request *http.Request) {
+	if !allowMobileMFA {
+		response.WriteHeader(410)
+		ServePage(response, disabledFeaturePage)
+		return
+	}
 	var (
 		userID        string
 		recoveryToken string = request.FormValue("token")
@@ -1459,7 +1480,7 @@ func HandleSubRecoveryCode(response http.ResponseWriter, request *http.Request) 
 
 func HandleSubSessionRevoke(response http.ResponseWriter, request *http.Request) {
 	if !allowSessionRevoke {
-		response.WriteHeader(400)
+		response.WriteHeader(410)
 		fmt.Fprint(response, `Feature Disabled.`)
 		return
 	}
