@@ -942,6 +942,7 @@ func TestPageRequests(t *testing.T) {
 		{"/gatehouse/recoverycode", true, false, true, true, 200},
 		{"/gatehouse/revokesessions", false, false, false, false, 303},
 		{"/gatehouse/revokesessions", true, false, false, true, 200},
+		{"/gatehouse/logout", false, false, false, false, 410},
 	}
 
 	var responseCode int
@@ -1013,6 +1014,7 @@ func TestPageDatabaseFailure(t *testing.T) {
 		{"/gatehouse/recoverycode", true, false, true, true, 500},
 		{"/gatehouse/revokesessions", false, false, false, false, 303},
 		{"/gatehouse/revokesessions", true, false, false, true, 500},
+		{"/gatehouse/logout", true, false, false, true, 500},
 	}
 
 	db.Close()
@@ -1123,6 +1125,13 @@ func TestPostRequests(t *testing.T) {
 		formValues          []formFields
 	}{
 		{"/gatehouse/submit/login", "", "", "", 303, []formFields{{"username", username}, {"password", password}}},
+		{"/gatehouse/submit/login", "", "", "", 400, []formFields{{"username", ""}, {"password", password}}},
+		{"/gatehouse/submit/login", "", "", "", 400, []formFields{{"username", username}, {"password", ""}}},
+		{"/gatehouse/submit/login", "", "", "", 303, []formFields{{"username", username}, {"password", "NotCorrectPW"}}},
+		{"/gatehouse/submit/login", "", "", "", 303, []formFields{{"username", username}, {"password", "NotCorrectPW"}}},
+		{"/gatehouse/submit/register", "", "", "", 400, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", ""}, {"passwordConfirm", ""}, {"email", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/register", "", "", "", 400, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", "NotMatching"}, {"email", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/register", "", "", "", 400, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@invalid"}}},
 		{"/gatehouse/submit/register", "", "", "", 303, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@testing.local"}}},
 		{"/gatehouse/submit/mfa", "", "", mfaSession, 303, []formFields{{"token", "123456"}}},
 		{"/gatehouse/submit/validatemfa", sessionToken, "", "", 400, []formFields{{"otp", "123456"}}},
@@ -1247,6 +1256,8 @@ func TestPostDisabledFeatures(t *testing.T) {
 		{"/gatehouse/submit/recoverycode", "", "", mfaSession, 410, []formFields{{"token", "123456"}}},
 		{"/gatehouse/submit/revokesessions", sessionToken, elevatedSession, "", 410, []formFields{{"token", "123456"}}},
 		{"/gatehouse/submit/deleteaccount", sessionToken, elevatedSession, "", 410, []formFields{}},
+		{"/gatehouse/submit/resetrequest", "", "", "", 410, []formFields{{"email", email}}},
+		{"/gatehouse/submit/reset", "", "", "", 410, []formFields{{"password", password}, {"password", password}}},
 	}
 
 	var responseCode int

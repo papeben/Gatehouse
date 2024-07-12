@@ -37,3 +37,9 @@ func TestEnvWithDefaultBool(t *testing.T) {
 		})
 	}
 }
+
+func TestPrintBanner(t *testing.T) {
+	t.Run("Printing banner", func(t *testing.T) {
+		printBanner()
+	})
+}
