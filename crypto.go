@@ -141,7 +141,7 @@ func GenerateSessionToken() (string, error) {
 	if err == sql.ErrNoRows {
 		return newToken, nil
 	} else if err != nil {
-		logDbError(err)
+		logMessage(1, err.Error())
 		return "", err
 	} else {
 		newToken, err = GenerateSessionToken()

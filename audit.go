@@ -13,6 +13,3 @@ func logMessage(severity int, message string) {
 	}
 }
 
-func logDbError(err error) {
-	logMessage(1, fmt.Sprintf("Error executing database query: %s", err.Error()))
-}

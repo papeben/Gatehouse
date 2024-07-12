@@ -68,14 +68,7 @@ var (
 )
 
 func main() {
-	fmt.Println("   _____       _       _                          ")
-	fmt.Println("  / ____|     | |     | |                         ")
-	fmt.Println(" | |  __  __ _| |_ ___| |__   ___  _   _ ___  ___ ")
-	fmt.Println(" | | |_ |/ _\\ | __/ _ \\ _ \\  / _ \\| | | / __|/ _ \\")
-	fmt.Println(" | |__| | (_| | ||  __/ | | | (_) | |_| \\__ \\  __/")
-	fmt.Println("  \\_____|\\__,_|\\__\\___|_| |_|\\___/ \\__,_|___/\\___|")
-	fmt.Println("                                                  ")
-	fmt.Println("Version " + gatehouseVersion)
+	printBanner()
 	InitDatabase(10)
 	defer db.Close()
 	LoadTemplates()
@@ -100,6 +93,17 @@ func main() {
 	if err != nil {
 		logMessage(0, fmt.Sprintf("Server error: %s", err.Error()))
 	}
+}
+
+func printBanner() {
+	fmt.Println("   _____       _       _                          ")
+	fmt.Println("  / ____|     | |     | |                         ")
+	fmt.Println(" | |  __  __ _| |_ ___| |__   ___  _   _ ___  ___ ")
+	fmt.Println(" | | |_ |/ _\\ | __/ _ \\ _ \\  / _ \\| | | / __|/ _ \\")
+	fmt.Println(" | |__| | (_| | ||  __/ | | | (_) | |_| \\__ \\  __/")
+	fmt.Println("  \\_____|\\__,_|\\__\\___|_| |_|\\___/ \\__,_|___/\\___|")
+	fmt.Println("                                                  ")
+	fmt.Println("Version " + gatehouseVersion)
 }
 
 func envWithDefault(variableName string, defaultString string) string {
@@ -276,12 +280,14 @@ func CreateDatabaseTable(tableSql string) {
 func ServePage(response http.ResponseWriter, pageStruct GatehouseForm) {
 	err := formTemplate.Execute(response, pageStruct)
 	if err != nil {
-		logMessage(1, fmt.Sprintf("Error rendering page: %s", err.Error()))
-		ServeErrorPage(response)
+		ServeErrorPage(response, err)
 	}
 }
 
-func ServeErrorPage(response http.ResponseWriter) {
+func ServeErrorPage(response http.ResponseWriter, err error) {
+	if err != nil {
+		logMessage(1, fmt.Sprintf("An internal error occurred: %s", err.Error()))
+	}
 	var errorPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - Error Occurred",
 		"Error Occurred",
@@ -297,7 +303,7 @@ func ServeErrorPage(response http.ResponseWriter) {
 		functionalPath,
 	}
 	response.WriteHeader(500)
-	err := formTemplate.Execute(response, errorPage)
+	err = formTemplate.Execute(response, errorPage)
 	if err != nil {
 		logMessage(1, fmt.Sprintf("Error rendering error page: %s", err.Error()))
 		fmt.Fprint(response, `Internal Error.`)

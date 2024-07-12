@@ -16,16 +16,14 @@ import (
 func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, userID string) {
 	token, err := GenerateSessionToken()
 	if err != nil {
-		ServeErrorPage(response)
-		logDbError(err)
+		ServeErrorPage(response, err)
 		return
 	}
 	logMessage(4, fmt.Sprintf("User %s (%s) authenticated", userID, request.RemoteAddr))
 
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userID)
 	if err != nil {
-		logDbError(err)
-		ServeErrorPage(response)
+		ServeErrorPage(response, err)
 	} else {
 		cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
 		http.SetCookie(response, &cookie)
@@ -38,8 +36,7 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 			)
 			err = db.QueryRow(fmt.Sprintf("SELECT email, username FROM %s_accounts WHERE id = ?", tablePrefix), userID).Scan(&email, &username)
 			if err != nil {
-				logDbError(err)
-				ServeErrorPage(response)
+				ServeErrorPage(response, err)
 			} else {
 				err = sendMail(email, "Sign In - New Device", username, "A new device has signed in to your account.<br><br>If this was you, there's nothing you need to do. Otherwise, please change your password immediately.", "", "")
 				if err != nil {
@@ -50,21 +47,22 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 	}
 }
 
-func IsValidSession(sessionToken string) bool {
+func IsValidSession(sessionToken string) (bool, error) {
 	var userId string
 
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userId)
 	if err == sql.ErrNoRows {
-		return false
+		logMessage(5, "Invalid session token presented")
+		return false, nil
 	} else if err != nil {
-		logDbError(err)
-		return false
+		logMessage(1, err.Error())
+		return false, err
 	} else {
-		return true
+		return true, nil
 	}
 }
 
-func IsValidSessionWithInfo(sessionToken string) (bool, string, string, bool) {
+func IsValidSessionWithInfo(sessionToken string) (bool, string, string, bool, error) {
 	var (
 		userID         string
 		userEmail      string
@@ -72,80 +70,69 @@ func IsValidSessionWithInfo(sessionToken string) (bool, string, string, bool) {
 	)
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id, email, email_confirmed FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID, &userEmail, &emailConfirmed)
 	if err == sql.ErrNoRows {
-		return false, "", "", false
+		logMessage(5, "Invalid session token presented")
+		return false, "", "", false, nil
 	} else if err != nil {
-		logDbError(err)
-		return false, "", "", false
+		return false, "", "", false, err
 	} else {
-		return true, userID, userEmail, emailConfirmed
+		return true, userID, userEmail, emailConfirmed, nil
 	}
 }
 
-func IsValidCriticalSession(sessionToken string) bool {
+func IsValidCriticalSession(sessionToken string) (bool, error) {
 	var userID string
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND critical = 1 AND created > NOW() - INTERVAL 1 HOUR", tablePrefix, tablePrefix), sessionToken).Scan(&userID)
-	if err != nil && err == sql.ErrNoRows {
-		return false
+	if err == sql.ErrNoRows {
+		logMessage(5, "Invalid critical session token presented")
+		return false, nil
 	} else if err != nil {
-		logDbError(err)
-		return false
+		return false, err
 	} else {
-		return true
+		return true, nil
 	}
 }
 
-func PendingEmailApproval(sessionToken string) bool {
+func PendingEmailApproval(sessionToken string) (bool, error) {
 	var emailConfirmed bool
 	err := db.QueryRow(fmt.Sprintf("SELECT email_confirmed FROM %s_accounts INNER JOIN %s_sessions ON id = user_id WHERE session_token = ?", tablePrefix, tablePrefix), sessionToken).Scan(&emailConfirmed)
-	if err != nil && err != sql.ErrNoRows {
-		logDbError(err)
-		return false
-	} else if err == sql.ErrNoRows || emailConfirmed {
-		return false
+	if err == sql.ErrNoRows || emailConfirmed {
+		return false, nil
+	} else if err != nil {
+		return false, err
 	} else {
-		return true
+		return true, nil
 	}
 }
 
-func ConfirmEmailCode(code string) bool {
+func ConfirmEmailCode(code string) (bool, error) {
 	var isTokenUsed bool
 	err := db.QueryRow(fmt.Sprintf("SELECT used FROM %s_confirmations WHERE confirmation_token = ?", tablePrefix), code).Scan(&isTokenUsed)
 	if err == sql.ErrNoRows {
-		return false
+		return false, nil
 	} else if err != nil {
-		logDbError(err)
-		return false
+		return false, err
 	} else if isTokenUsed {
-		return false
-	} else {
-		_, err := db.Exec(fmt.Sprintf("UPDATE %s_accounts INNER JOIN %s_confirmations ON user_id = id SET email_confirmed = 1, used = 1 WHERE confirmation_token = ?", tablePrefix, tablePrefix), code)
-		if err != nil {
-			logDbError(err)
-			return false
-		}
-		return true
+		return false, nil
 	}
+	_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts INNER JOIN %s_confirmations ON user_id = id SET email_confirmed = 1, used = 1 WHERE confirmation_token = ?", tablePrefix, tablePrefix), code)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
-func SendEmailConfirmationCode(userID string, email string, username string) {
+func SendEmailConfirmationCode(userID string, email string, username string) error {
 	code, err := GenerateEmailConfirmationToken()
 
 	if err == nil {
 		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_confirmations (confirmation_token, user_id) VALUES (?, ?)", tablePrefix), code, userID)
 	}
 
-	if err != nil {
-		logDbError(err)
-	}
-
 	if err == nil {
 		// Email code
 		err = sendMail(email, "Confirm your Email Address", username, fmt.Sprintf("Thank you for signing up to %s! Please confirm your email by clicking the link below:", appName), fmt.Sprintf("%s/%s/confirmcode?c=%s", webDomain, functionalPath, code), "If you did not request this action, please ignore this email.")
 	}
-
-	if err != nil {
-		logMessage(1, fmt.Sprintf("Email confirmation link for user %s did not send!!!", userID))
-	}
+	return err
 }
 
 func sendMail(to string, subject string, recipient string, message string, link string, closingStatement string) error {
@@ -251,106 +238,98 @@ func sendMail(to string, subject string, recipient string, message string, link 
 	return err
 }
 
-func ResetPasswordRequest(email string) bool {
+func ResetPasswordRequest(email string) (bool, error) {
 
 	var userID string
 	var username string
 	err := db.QueryRow(fmt.Sprintf("SELECT id, username FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID, &username)
 	if err == sql.ErrNoRows {
-		return false
+		return false, nil
 	} else if err != nil {
-		logDbError(err)
-		return false
-	} else {
-		// Reset password
-		resetCode, err := GenerateResetToken()
-		if err != nil {
-			logDbError(err)
-			return false
-		}
-		_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_resets (user_id, reset_token) VALUES (?, ?)", tablePrefix), userID, resetCode)
-		if err != nil {
-			logDbError(err)
-		} else {
-			err = sendMail(strings.ToLower(email), "Password Reset Request", username, fmt.Sprintf("Click the link below to reset your %s password:", appName), fmt.Sprintf("%s/%s/resetpassword?c=%s", webDomain, functionalPath, resetCode), "If you did not request this action, please disregard this email.")
-		}
-
-		if err != nil {
-			logMessage(2, fmt.Sprintf("Password reset request for %s was not sent.", username))
-			return false
-		}
-		return true
+		return false, err
 	}
+
+	// Reset password
+	resetCode, err := GenerateResetToken()
+	if err != nil {
+		return false, err
+	}
+	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_resets (user_id, reset_token) VALUES (?, ?)", tablePrefix), userID, resetCode)
+	if err != nil {
+		return false, err
+	}
+
+	err = sendMail(strings.ToLower(email), "Password Reset Request", username, fmt.Sprintf("Click the link below to reset your %s password:", appName), fmt.Sprintf("%s/%s/resetpassword?c=%s", webDomain, functionalPath, resetCode), "If you did not request this action, please disregard this email.")
+	if err != nil {
+		logMessage(2, fmt.Sprintf("Password reset request for %s was not sent.", username))
+		return false, err
+	}
+	return true, nil
 }
 
-func IsValidResetCode(code string) bool {
+func IsValidResetCode(code string) (bool, error) {
 	var userID string
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id FROM %s_resets WHERE reset_token = ? AND used = 0", tablePrefix), code).Scan(&userID)
 	if err == sql.ErrNoRows {
-		return false
+		return false, nil
 	} else if err != nil {
-		logDbError(err)
-		return false
-	} else {
-		return true
+		return false, err
 	}
+	return true, nil
 }
 
-func ResendConfirmationEmail(sessionToken string) bool {
+func ResendConfirmationEmail(sessionToken string) (bool, error) {
 	var userID string
 	var username string
 	var email string
 	err := db.QueryRow(fmt.Sprintf("SELECT user_id, email, username FROM %s_sessions INNER JOIN %s_accounts ON id = user_id WHERE session_token = ? AND email_resent = 0", tablePrefix, tablePrefix), sessionToken).Scan(&userID, &email, &username)
 	if err == sql.ErrNoRows {
-		return false
+		return false, nil
 	} else if err != nil {
-		logDbError(err)
-		return false
-	} else {
-		SendEmailConfirmationCode(userID, email, username)
-		_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_resent = 1 WHERE id = ?", tablePrefix), userID)
-		if err != nil {
-			logDbError(err)
-			return false
-		}
-		return true
+		return false, err
 	}
+
+	err = SendEmailConfirmationCode(userID, email, username)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET email_resent = 1 WHERE id = ?", tablePrefix), userID)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+
 }
 
-func IsValidNewUsername(username string) bool {
+func IsValidNewUsername(username string) (bool, error) {
 	match, _ := regexp.MatchString("^[a-zA-Z0-9\\-_]{1,32}$", username)
 	if !match {
-		return false
-	} else {
-		var userID string
-		err := db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID)
-		if err == sql.ErrNoRows {
-			return true
-		} else if err != nil {
-			logDbError(err)
-			return false
-		} else {
-			return false
-		}
+		return false, nil
 	}
+	var userID string
+	err := db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE username = ?", tablePrefix), username).Scan(&userID)
+	if err == sql.ErrNoRows {
+		return true, nil
+	} else if err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
-func IsValidNewEmail(email string) bool {
+func IsValidNewEmail(email string) (bool, error) {
 	match, _ := regexp.MatchString(`^[\w!#$%&'*+/=?^_{|}~-]+(\.[\w!#$%&'*+/=?^_{|}~-]+)*@[a-zA-Z0-9]+(\.[a-zA-Z0-9-]+)*(\.[a-zA-Z]{2,})$`, email)
 	if !match {
-		return false
-	} else {
-		var userID string
-		err := db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID)
-		if err == sql.ErrNoRows {
-			return true
-		} else if err != nil {
-			logDbError(err)
-			return false
-		} else {
-			return false
-		}
+		return false, nil
 	}
+	var userID string
+	err := db.QueryRow(fmt.Sprintf("SELECT id FROM %s_accounts WHERE email = ?", tablePrefix), strings.ToLower(email)).Scan(&userID)
+	if err == sql.ErrNoRows {
+		return true, nil
+	} else if err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 func IsValidPassword(password string) bool {
