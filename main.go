@@ -201,6 +201,7 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/changeemail":        HandleChangeEmail,
 			"/" + functionalPath + "/changeusername":     HandleChangeUsername,
 			"/" + functionalPath + "/changeavatar":       HandleChangeAvatar,
+			"/" + functionalPath + "/myavatar":           HandleMyAvatar,
 			"/" + functionalPath + "/deleteaccount":      HandleDeleteAccount,
 			"/" + functionalPath + "/recoverycode":       HandleRecoveryCode,
 			"/" + functionalPath + "/revokesessions":     HandleSessionRevoke,
@@ -258,7 +259,7 @@ func InitDatabase(n int) {
 		logMessage(4, "Creating database tables")
 		db.SetConnMaxIdleTime(10 * time.Second)
 
-		CreateDatabaseTable(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NOT NULL DEFAULT '',`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar_url` TEXT NULL,	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0, `mfa_type` VARCHAR(8) NOT NULL DEFAULT 'email', `mfa_secret` VARCHAR(16) NULL, `username_changed` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+		CreateDatabaseTable(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_accounts` (`id` VARCHAR(8) NOT NULL,`username` VARCHAR(32) NULL,`email` VARCHAR(255) NOT NULL DEFAULT '',`email_confirmed` TINYINT(1) NULL DEFAULT 0, `email_resent` TINYINT(1) NULL DEFAULT 0,`password` VARCHAR(64) NULL,`avatar_url` VARCHAR(128) NOT NULL DEFAULT '/gatehouse/static/icons/user.png',	`tos` TINYINT(1) NULL DEFAULT 0,`locked` TINYINT(1) NULL DEFAULT 0, `mfa_type` VARCHAR(8) NOT NULL DEFAULT 'email', `mfa_secret` VARCHAR(16) NULL, `username_changed` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,	PRIMARY KEY (`id`))  ENGINE = InnoDB  DEFAULT CHARACTER SET = utf8  COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 
 		CreateDatabaseTable(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_sessions` (`session_token` VARCHAR(64) NOT NULL, `user_id` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `critical` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`session_token`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 

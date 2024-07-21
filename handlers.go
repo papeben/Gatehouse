@@ -41,6 +41,7 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 		proxied = "Served"
 	} else if strings.HasPrefix(request.URL.Path, "/"+functionalPath+"/avatar/") {
 		HandleAvatar(response, request)
+		proxied = "Served"
 	} else if requireEmailConfirm && validSession && !emailConfirmed {
 		http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
 		proxied = "Redirected"
@@ -792,6 +793,34 @@ func HandleAvatar(response http.ResponseWriter, request *http.Request) {
 	}
 
 	response.Write(data)
+}
+
+func HandleMyAvatar(response http.ResponseWriter, request *http.Request) {
+	validSession := false
+	var userID string
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession, userID, _, _, err = IsValidSessionWithInfo(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	}
+	if !validSession {
+		response.WriteHeader(404)
+		fmt.Fprint(response, `Not Found.`)
+		return
+	}
+
+	var avatarURL string
+	err = db.QueryRow(fmt.Sprintf("SELECT avatar_url FROM %s_accounts WHERE id = ?", tablePrefix), userID).Scan(&avatarURL)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	http.Redirect(response, request, avatarURL, http.StatusSeeOther)
 }
 
 //////////////////////////////////////////////////////////////////////////////
