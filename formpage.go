@@ -513,22 +513,6 @@ var (
 		functionalPath,
 	}
 
-	areYouSurePage GatehouseForm = GatehouseForm{ // Define forgot password page
-		appName + " - Confirm",
-		"Confirm Action",
-		"/" + functionalPath + "/submit/needstobereplaced",
-		"POST",
-		[]GatehouseFormElement{
-			FormCreateDivider(),
-			FormCreateHint("Are you sure you wish to proceed?"),
-			FormCreateSubmitInput("submit", "Yes"),
-			FormCreateButtonLink("/"+functionalPath+"/manage", "No, take me back!"),
-			FormCreateDivider(),
-		},
-		[]OIDCButton{},
-		functionalPath,
-	}
-
 	elevateSessionPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - Reauthenticate",
 		"Confirm Password",
