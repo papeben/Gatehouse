@@ -1505,6 +1505,12 @@ func HandleSubAvatarChange(response http.ResponseWriter, request *http.Request) 
 		return
 	}
 
+	_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET avatar_url = ? WHERE id = ?", tablePrefix), fmt.Sprintf("/%s/avatar/%s.jpg", functionalPath, avatarID), userID)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
 	ServePage(response, avatarChangedPage)
 
 }
