@@ -460,6 +460,23 @@ var (
 		functionalPath,
 	}
 
+	avatarChangedPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Success",
+		"Avatar changed",
+		"",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Your avatar has been changed successfully."),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Manage Account"),
+			FormCreateDivider(),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Back To Site"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
 	mfaEmailPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - MFA",
 		"MFA Code Sent",

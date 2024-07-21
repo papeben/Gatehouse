@@ -1450,7 +1450,12 @@ func HandleSubAvatarChange(response http.ResponseWriter, request *http.Request) 
 		return
 	}
 
-	request.ParseMultipartForm(6 << 20)
+	err = request.ParseMultipartForm(6 << 20)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
 	file, handler, err := request.FormFile("avatarupload")
 	if err != nil {
 		ServeErrorPage(response, err)
@@ -1499,6 +1504,8 @@ func HandleSubAvatarChange(response http.ResponseWriter, request *http.Request) 
 		ServeErrorPage(response, err)
 		return
 	}
+
+	ServePage(response, avatarChangedPage)
 
 }
 
