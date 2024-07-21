@@ -39,6 +39,8 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 	if handler != nil {
 		handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
 		proxied = "Served"
+	} else if strings.HasPrefix(request.URL.Path, "/"+functionalPath+"/avatar/") {
+		HandleAvatar(response, request)
 	} else if requireEmailConfirm && validSession && !emailConfirmed {
 		http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
 		proxied = "Redirected"
@@ -771,6 +773,25 @@ func HandleSessionRevoke(response http.ResponseWriter, request *http.Request) {
 	}
 
 	ServePage(response, sessionRevokePage)
+}
+
+func HandleAvatar(response http.ResponseWriter, request *http.Request) {
+	pathSplit := strings.Split(request.URL.Path, "/")
+	avatarID := strings.Split(pathSplit[len(pathSplit)-1], ".")[0]
+
+	var data []byte
+
+	err := db.QueryRow(fmt.Sprintf("SELECT data FROM %s_avatars WHERE avatar_id = ?", tablePrefix), avatarID).Scan(&data)
+	if err == sql.ErrNoRows {
+		response.WriteHeader(404)
+		fmt.Fprint(response, `Not Found.`)
+		return
+	} else if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	response.Write(data)
 }
 
 //////////////////////////////////////////////////////////////////////////////
