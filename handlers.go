@@ -792,7 +792,11 @@ func HandleAvatar(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	response.Write(data)
+	_, err = response.Write(data)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
 }
 
 func HandleMyAvatar(response http.ResponseWriter, request *http.Request) {
