@@ -131,7 +131,7 @@ func HandleLogout(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_sessions WHERE session_token = ?", tablePrefix),sessionToken.Value)
+	_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_sessions WHERE session_token = ?", tablePrefix), sessionToken.Value)
 	if err != nil {
 		ServeErrorPage(response, err)
 		return
@@ -297,7 +297,7 @@ func HandleIsUsernameTaken(response http.ResponseWriter, request *http.Request) 
 		ServeErrorPage(response, err)
 		return
 	}
-	if !isValid{
+	if !isValid {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `Username taken.`)
 	} else {
@@ -515,6 +515,10 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
 	}
 
+	if allowAvatarChange {
+		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeavatar"), "Change Avatar"))
+	}
+
 	// Security options
 
 	if allowMobileMFA || allowSessionRevoke {
@@ -576,7 +580,7 @@ func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	var validSession         bool = false
+	var validSession bool = false
 	var validCriticalSession bool = false
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
@@ -655,6 +659,33 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 		ServePage(response, usernameChangePage)
 	}
 
+}
+
+func HandleChangeAvatar(response http.ResponseWriter, request *http.Request) {
+	if !allowAvatarChange {
+		response.WriteHeader(410)
+		ServePage(response, disabledFeaturePage)
+		return
+	}
+
+	var (
+		validSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	}
+	if !validSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
+		return
+	}
+
+	ServePage(response, avatarChangePage)
 }
 
 func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {

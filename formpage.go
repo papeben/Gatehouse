@@ -160,6 +160,19 @@ func FormCreateHint(text string) GatehouseFormElement {
 		"",
 	}
 }
+func FormCreateSmallHint(text string) GatehouseFormElement {
+	return GatehouseFormElement{
+		"gh_div_smallhint",
+		text,
+		false,
+		"",
+		false,
+		false,
+		"",
+		"",
+		"",
+	}
+}
 func FormCreateQR(b64Data string) GatehouseFormElement {
 	return GatehouseFormElement{
 		"gh_img_qr",
@@ -170,6 +183,20 @@ func FormCreateQR(b64Data string) GatehouseFormElement {
 		true,
 		"",
 		"",
+		"",
+	}
+}
+
+func FormCreateUploadInput(name string, text string) GatehouseFormElement {
+	return GatehouseFormElement{
+		"gh_inp_upload",
+		text,
+		false,
+		"",
+		true,
+		false,
+		"file",
+		name,
 		"",
 	}
 }
@@ -409,6 +436,24 @@ var (
 			FormCreateDivider(),
 			FormCreateHint("You have already changed your username recently."),
 			FormCreateButtonLink("/"+functionalPath+"/manage", "Back"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	avatarChangePage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Change Your Avatar",
+		"Change Your Avatar",
+		"/" + functionalPath + "/submit/changeavatar",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Upload your new avatar:"),
+			FormCreateUploadInput("avatarupload", "Select Image"),
+			FormCreateSmallHint("JPG or PNG formats supported. Max 5MB"),
+			FormCreateDivider(),
+			FormCreateSubmitInput("submit", "Upload"),
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},

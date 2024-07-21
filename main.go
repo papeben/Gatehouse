@@ -61,6 +61,7 @@ var (
 	allowEmailChange      bool     = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
 	allowDeleteAccount    bool     = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
 	allowSessionRevoke    bool     = envWithDefaultBool("ALLOW_SESSION_REVOKE", true)
+	allowAvatarChange     bool     = envWithDefaultBool("ALLOW_AVATAR_CHANGE", true)
 	enableLoginAlerts     bool     = envWithDefaultBool("ENABLE_LOGIN_ALERTS", true)
 	enableMFAAlerts       bool     = envWithDefaultBool("ENABLE_MFA_ALERTS", true)
 	publicPages           string   = envWithDefault("PUBLIC_PAGES", "")
@@ -199,6 +200,7 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/manage":             HandleManage,
 			"/" + functionalPath + "/changeemail":        HandleChangeEmail,
 			"/" + functionalPath + "/changeusername":     HandleChangeUsername,
+			"/" + functionalPath + "/changeavatar":       HandleChangeAvatar,
 			"/" + functionalPath + "/deleteaccount":      HandleDeleteAccount,
 			"/" + functionalPath + "/recoverycode":       HandleRecoveryCode,
 			"/" + functionalPath + "/revokesessions":     HandleSessionRevoke,
