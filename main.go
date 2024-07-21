@@ -216,6 +216,7 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/submit/removemfa":      HandleSubRemoveMFA,
 			"/" + functionalPath + "/submit/changeemail":    HandleSubEmailChange,
 			"/" + functionalPath + "/submit/changeusername": HandleSubUsernameChange,
+			"/" + functionalPath + "/submit/changeavatar":   HandleSubAvatarChange,
 			"/" + functionalPath + "/submit/deleteaccount":  HandleSubDeleteAccount,
 			"/" + functionalPath + "/submit/recoverycode":   HandleSubRecoveryCode,
 			"/" + functionalPath + "/submit/revokesessions": HandleSubSessionRevoke,
@@ -269,7 +270,7 @@ func InitDatabase(n int) {
 
 		CreateDatabaseTable(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_recovery` (`user_id` VARCHAR(8) NOT NULL, `code` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `used` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`user_id`, `code`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 
-		CreateDatabaseTable(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_avatars` (`avatar_id` VARCHAR(16) NOT NULL, `format` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `data` BLOB NOT NULL, PRIMARY KEY (`avatar_id`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
+		CreateDatabaseTable(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_avatars` (`avatar_id` VARCHAR(16) NOT NULL, `format` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `data` LONGBLOB NOT NULL, PRIMARY KEY (`avatar_id`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 	}
 }
 

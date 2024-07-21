@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"net/http"
 	"path"
 	"strings"
@@ -1413,6 +1417,87 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 	err = sendMail(email, "Username Changed", username, "Your username has been changed successfully. You will be able to change your username again after 30 days.", "", "If you did not perform this action, please change your password immediately.")
 	if err != nil {
 		logMessage(3, fmt.Sprintf("User %s was not notified of username change.", username))
+	}
+
+}
+
+func HandleSubAvatarChange(response http.ResponseWriter, request *http.Request) {
+	if !allowAvatarChange {
+		response.WriteHeader(410)
+		fmt.Fprint(response, `Feature Disabled.`)
+		return
+	}
+
+	var (
+		validSession bool = false
+		image        image.Image
+		imageBytes   []byte
+		userID       string
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession, userID, _, _, err = IsValidSessionWithInfo(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	}
+
+	if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+		return
+	}
+
+	request.ParseMultipartForm(6 << 20)
+	file, handler, err := request.FormFile("avatarupload")
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	defer file.Close()
+	logMessage(5, fmt.Sprintf("User %s uploaded file %s: %d %s", userID, handler.Filename, handler.Size, handler.Header["Content-Type"]))
+
+	if handler.Header["Content-Type"][0] == "image/png" {
+		image, err = png.Decode(file)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	} else if handler.Header["Content-Type"][0] == "image/jpeg" {
+		image, err = jpeg.Decode(file)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	} else {
+		ServeErrorPage(response, nil)
+		return
+	}
+
+	var options = jpeg.Options{
+		Quality: 70,
+	}
+
+	imageBuffer := new(bytes.Buffer)
+	err = jpeg.Encode(imageBuffer, image, &options)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	imageBytes = imageBuffer.Bytes()
+	avatarID, err := GenerateAvatarID()
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_avatars (avatar_id, format, data) VALUES (?, ?, ?)", tablePrefix), avatarID, "jpeg", imageBytes)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
 	}
 
 }

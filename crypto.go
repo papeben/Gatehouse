@@ -134,6 +134,21 @@ func GenerateUserID() (string, error) {
 	}
 }
 
+func GenerateAvatarID() (string, error) {
+	newID := GenerateRandomString(16)
+
+	var avatarID string
+	err := db.QueryRow(fmt.Sprintf("SELECT avatar_id FROM %s_avatars WHERE avatar_id = ?", tablePrefix), strings.ToLower(newID)).Scan(&avatarID)
+	if err == sql.ErrNoRows {
+		return newID, nil
+	} else if err != nil {
+		return "", err
+	} else {
+		newID, err = GenerateAvatarID()
+		return newID, err
+	}
+}
+
 func GenerateSessionToken() (string, error) {
 	newToken := GenerateRandomString(64)
 	var userID string
