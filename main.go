@@ -202,6 +202,7 @@ func LoadFuncionalURIs() {
 			"/" + functionalPath + "/changeusername":     HandleChangeUsername,
 			"/" + functionalPath + "/changeavatar":       HandleChangeAvatar,
 			"/" + functionalPath + "/myavatar":           HandleMyAvatar,
+			"/" + functionalPath + "/myusername":         HandleMyUsername,
 			"/" + functionalPath + "/deleteaccount":      HandleDeleteAccount,
 			"/" + functionalPath + "/recoverycode":       HandleRecoveryCode,
 			"/" + functionalPath + "/revokesessions":     HandleSessionRevoke,

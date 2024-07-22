@@ -827,6 +827,34 @@ func HandleMyAvatar(response http.ResponseWriter, request *http.Request) {
 	http.Redirect(response, request, avatarURL, http.StatusSeeOther)
 }
 
+func HandleMyUsername(response http.ResponseWriter, request *http.Request) {
+	validSession := false
+	var userID string
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession, userID, _, _, err = IsValidSessionWithInfo(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	}
+	if !validSession {
+		response.WriteHeader(404)
+		fmt.Fprint(response, `Not Found.`)
+		return
+	}
+	var username string
+	err = db.QueryRow(fmt.Sprintf("SELECT username FROM %s_accounts WHERE id = ?", tablePrefix), userID).Scan(&username)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	response.WriteHeader(200)
+	fmt.Fprint(response, username)
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // Form Submissions
 
