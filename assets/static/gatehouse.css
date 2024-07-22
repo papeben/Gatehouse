@@ -1,5 +1,7 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-size: 300px;
+    background-repeat: repeat;
 }
 .gh_form {
     position: absolute;
@@ -9,6 +11,7 @@ body {
     border-radius: 10px;
     box-shadow: 1px 1px 6px #888;
     transform: translate(-50%, -50%);
+    background-color: #ffffff;
 }
 .gh_str_title {
     font-size: 24px;
@@ -105,5 +108,11 @@ body {
     width: 180px;
     height: 180px;
     margin: 0px 60px;
+    text-align: center;
+}
+.gh_img_icon {
+    width: 60px;
+    height: 60px;
+    margin: 20px 120px 0px 120px;
     text-align: center;
 }
