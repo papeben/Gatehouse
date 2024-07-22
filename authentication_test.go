@@ -50,7 +50,7 @@ func TestIsValidSession(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	valid, err = IsValidSession(sessionToken)
+	valid, _ = IsValidSession(sessionToken)
 	if valid {
 		t.Errorf("Expected IsValidSession to return false for invalid session token %s, but it returned true", sessionToken)
 	}

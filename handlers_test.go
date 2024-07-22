@@ -132,9 +132,7 @@ func createDummyMFASession(userId string) string {
 
 	mfaToken := GenerateRandomNumbers(6)
 	mfaSessionToken := GenerateRandomString(32)
-	if err != nil {
-		panic(err)
-	}
+
 	_, err = tempDb.Exec(fmt.Sprintf("INSERT INTO %s_mfa (mfa_session, type, user_id, token) VALUES (?, ?, ?, ?)", tablePrefix), mfaSessionToken, "totp", userId, mfaToken)
 	if err != nil {
 		panic(err)
