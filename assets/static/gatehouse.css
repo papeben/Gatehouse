@@ -123,6 +123,23 @@ body {
     background-color: #fff;
     box-shadow: 1px 1px 3px #000;
 }
+.gh_div_back {
+    position: absolute;
+    left: -70px;
+    top: 0px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    padding: 10px;
+    text-align:center;
+    background-color: #fff;
+    font-size: 12px;
+    box-shadow: 1px 1px 3px #000;
+}
+.gh_div_back:hover {
+    cursor: pointer;
+    background-color: #f1f1f1;
+}
 .gh_img_qr {
     width: 180px;
     height: 180px;
@@ -134,4 +151,9 @@ body {
     height: 60px;
     margin: 20px 120px 10px 120px;
     text-align: center;
+}
+.gh_img_arrow {
+    height: 20px;
+    width: 20px;
+    margin-top: 3px;
 }

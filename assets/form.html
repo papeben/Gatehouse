@@ -7,6 +7,10 @@
     </head>
     <body style="background-image: url('/{{ .FunctionalPath }}/static/icons/GatehouseBackdrop.png');">
         <form class="gh_form" action="{{ .FormAction }}" method="{{ .FormMethod }}" onsubmit="return submitReady()" enctype='multipart/form-data'>
+            <div class="gh_div_back" onclick="history.back()">
+                <img src="/{{ .FunctionalPath }}/static/icons/Arrow.png" class="gh_img_arrow">
+                Back
+            </div>
             <table>
                 <tr>
                     <td>
