@@ -470,7 +470,25 @@ var (
 			FormCreateHint("Your avatar has been changed successfully."),
 			FormCreateButtonLink("/"+functionalPath+"/manage", "Manage Account"),
 			FormCreateDivider(),
-			FormCreateButtonLink("/"+functionalPath+"/manage", "Back To Site"),
+			FormCreateButtonLink("/"+functionalPath+"/", "Back To Site"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	avatarInvalidPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Invalid Image",
+		"Invalid Image",
+		"",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Your uploaded image was not supported."),
+			FormCreateHint("Make sure the image is a supported format and below 5MB in size."),
+			FormCreateButtonLink("/"+functionalPath+"/changeavatar", "Try Again"),
+			FormCreateDivider(),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Manage Account"),
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},

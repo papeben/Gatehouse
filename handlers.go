@@ -1493,7 +1493,8 @@ func HandleSubAvatarChange(response http.ResponseWriter, request *http.Request) 
 	if err == nil {
 		validSession, userID, _, _, err = IsValidSessionWithInfo(sessionCookie.Value)
 		if err != nil {
-			ServeErrorPage(response, err)
+			response.WriteHeader(403)
+			fmt.Fprint(response, `Unauthorized.`)
 			return
 		}
 	}
@@ -1506,7 +1507,7 @@ func HandleSubAvatarChange(response http.ResponseWriter, request *http.Request) 
 
 	err = request.ParseMultipartForm(6 << 20)
 	if err != nil {
-		ServeErrorPage(response, err)
+		ServePage(response, avatarInvalidPage)
 		return
 	}
 
@@ -1531,7 +1532,7 @@ func HandleSubAvatarChange(response http.ResponseWriter, request *http.Request) 
 			return
 		}
 	} else {
-		ServeErrorPage(response, nil)
+		ServePage(response, avatarInvalidPage)
 		return
 	}
 
