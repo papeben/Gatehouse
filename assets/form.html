@@ -6,7 +6,7 @@
         <script src="/{{ .FunctionalPath }}/static/gatehouse.js"></script>
     </head>
     <body>
-        <form class="gh_form" action="{{ .FormAction }}" method="{{ .FormMethod }}" onsubmit="return submitReady()">
+        <form class="gh_form" action="{{ .FormAction }}" method="{{ .FormMethod }}" onsubmit="return submitReady()" enctype='multipart/form-data'>
             <table>
                 <tr>
                     <td class="gh_str_title">{{ .FormTitle }}</td>

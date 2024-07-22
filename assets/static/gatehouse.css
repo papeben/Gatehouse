@@ -83,6 +83,11 @@ body {
     max-width: 300px;
     margin: 5px 0px;
 }
+.gh_div_smallhint {
+    font-size: 11px;
+    max-width: 300px;
+    margin: 5px 0px;
+}
 .gh_div_err {
     position: absolute;
     padding: 18px 10px;

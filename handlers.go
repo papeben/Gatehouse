@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"net/http"
 	"path"
 	"strings"
@@ -34,6 +38,9 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 	handler := functionalURIs[request.Method][strings.ToLower(request.URL.Path)] // Load handler associated with URI from functionalURIs map
 	if handler != nil {
 		handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
+		proxied = "Served"
+	} else if strings.HasPrefix(request.URL.Path, "/"+functionalPath+"/avatar/") {
+		HandleAvatar(response, request)
 		proxied = "Served"
 	} else if requireEmailConfirm && validSession && !emailConfirmed {
 		http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
@@ -131,7 +138,7 @@ func HandleLogout(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_sessions WHERE session_token = ?", tablePrefix),sessionToken.Value)
+	_, err = db.Exec(fmt.Sprintf("DELETE FROM %s_sessions WHERE session_token = ?", tablePrefix), sessionToken.Value)
 	if err != nil {
 		ServeErrorPage(response, err)
 		return
@@ -297,7 +304,7 @@ func HandleIsUsernameTaken(response http.ResponseWriter, request *http.Request) 
 		ServeErrorPage(response, err)
 		return
 	}
-	if !isValid{
+	if !isValid {
 		response.WriteHeader(400)
 		fmt.Fprint(response, `Username taken.`)
 	} else {
@@ -515,6 +522,10 @@ func HandleManage(response http.ResponseWriter, request *http.Request) {
 		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeusername"), "Change Username"))
 	}
 
+	if allowAvatarChange {
+		dashButtons = append(dashButtons, FormCreateButtonLink(path.Join("/", functionalPath, "changeavatar"), "Change Avatar"))
+	}
+
 	// Security options
 
 	if allowMobileMFA || allowSessionRevoke {
@@ -576,7 +587,7 @@ func HandleChangeEmail(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	var validSession         bool = false
+	var validSession bool = false
 	var validCriticalSession bool = false
 	sessionCookie, err := request.Cookie(sessionCookieName)
 	if err == nil {
@@ -655,6 +666,33 @@ func HandleChangeUsername(response http.ResponseWriter, request *http.Request) {
 		ServePage(response, usernameChangePage)
 	}
 
+}
+
+func HandleChangeAvatar(response http.ResponseWriter, request *http.Request) {
+	if !allowAvatarChange {
+		response.WriteHeader(410)
+		ServePage(response, disabledFeaturePage)
+		return
+	}
+
+	var (
+		validSession bool = false
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession, err = IsValidSession(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	}
+	if !validSession {
+		http.Redirect(response, request, path.Join("/", functionalPath, "/login"), http.StatusSeeOther)
+		return
+	}
+
+	ServePage(response, avatarChangePage)
 }
 
 func HandleDeleteAccount(response http.ResponseWriter, request *http.Request) {
@@ -736,6 +774,57 @@ func HandleSessionRevoke(response http.ResponseWriter, request *http.Request) {
 	}
 
 	ServePage(response, sessionRevokePage)
+}
+
+func HandleAvatar(response http.ResponseWriter, request *http.Request) {
+	pathSplit := strings.Split(request.URL.Path, "/")
+	avatarID := strings.Split(pathSplit[len(pathSplit)-1], ".")[0]
+
+	var data []byte
+
+	err := db.QueryRow(fmt.Sprintf("SELECT data FROM %s_avatars WHERE avatar_id = ?", tablePrefix), avatarID).Scan(&data)
+	if err == sql.ErrNoRows {
+		response.WriteHeader(404)
+		fmt.Fprint(response, `Not Found.`)
+		return
+	} else if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	_, err = response.Write(data)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+}
+
+func HandleMyAvatar(response http.ResponseWriter, request *http.Request) {
+	validSession := false
+	var userID string
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession, userID, _, _, err = IsValidSessionWithInfo(sessionCookie.Value)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	}
+	if !validSession {
+		response.WriteHeader(404)
+		fmt.Fprint(response, `Not Found.`)
+		return
+	}
+
+	var avatarURL string
+	err = db.QueryRow(fmt.Sprintf("SELECT avatar_url FROM %s_accounts WHERE id = ?", tablePrefix), userID).Scan(&avatarURL)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	http.Redirect(response, request, avatarURL, http.StatusSeeOther)
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1383,6 +1472,101 @@ func HandleSubUsernameChange(response http.ResponseWriter, request *http.Request
 	if err != nil {
 		logMessage(3, fmt.Sprintf("User %s was not notified of username change.", username))
 	}
+
+}
+
+func HandleSubAvatarChange(response http.ResponseWriter, request *http.Request) {
+	if !allowAvatarChange {
+		response.WriteHeader(410)
+		fmt.Fprint(response, `Feature Disabled.`)
+		return
+	}
+
+	var (
+		validSession bool = false
+		image        image.Image
+		imageBytes   []byte
+		userID       string
+	)
+
+	sessionCookie, err := request.Cookie(sessionCookieName)
+	if err == nil {
+		validSession, userID, _, _, err = IsValidSessionWithInfo(sessionCookie.Value)
+		if err != nil {
+			response.WriteHeader(403)
+			fmt.Fprint(response, `Unauthorized.`)
+			return
+		}
+	}
+
+	if !validSession {
+		response.WriteHeader(403)
+		fmt.Fprint(response, `Unauthorized.`)
+		return
+	}
+
+	err = request.ParseMultipartForm(6 << 20)
+	if err != nil {
+		ServePage(response, avatarInvalidPage)
+		return
+	}
+
+	file, handler, err := request.FormFile("avatarupload")
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+	defer file.Close()
+	logMessage(5, fmt.Sprintf("User %s uploaded file %s: %d %s", userID, handler.Filename, handler.Size, handler.Header["Content-Type"]))
+
+	if handler.Header["Content-Type"][0] == "image/png" {
+		image, err = png.Decode(file)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	} else if handler.Header["Content-Type"][0] == "image/jpeg" {
+		image, err = jpeg.Decode(file)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		}
+	} else {
+		ServePage(response, avatarInvalidPage)
+		return
+	}
+
+	var options = jpeg.Options{
+		Quality: 70,
+	}
+
+	imageBuffer := new(bytes.Buffer)
+	err = jpeg.Encode(imageBuffer, image, &options)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	imageBytes = imageBuffer.Bytes()
+	avatarID, err := GenerateAvatarID()
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_avatars (avatar_id, format, data) VALUES (?, ?, ?)", tablePrefix), avatarID, "jpeg", imageBytes)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	_, err = db.Exec(fmt.Sprintf("UPDATE %s_accounts SET avatar_url = ? WHERE id = ?", tablePrefix), fmt.Sprintf("/%s/avatar/%s.jpg", functionalPath, avatarID), userID)
+	if err != nil {
+		ServeErrorPage(response, err)
+		return
+	}
+
+	ServePage(response, avatarChangedPage)
 
 }
 
