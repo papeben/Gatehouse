@@ -5,9 +5,18 @@
         <link rel="stylesheet" href="/{{ .FunctionalPath }}/static/gatehouse.css">
         <script src="/{{ .FunctionalPath }}/static/gatehouse.js"></script>
     </head>
-    <body>
-        <form class="gh_form" action="{{ .FormAction }}" method="{{ .FormMethod }}" onsubmit="return submitReady()">
+    <body style="background-image: url('/{{ .FunctionalPath }}/static/icons/GatehouseBackdrop.png');">
+        <form class="gh_form" action="{{ .FormAction }}" method="{{ .FormMethod }}" onsubmit="return submitReady()" enctype='multipart/form-data'>
+            <div class="gh_div_back" onclick="history.back()">
+                <img src="/{{ .FunctionalPath }}/static/icons/Arrow.png" class="gh_img_arrow">
+                Back
+            </div>
             <table>
+                <tr>
+                    <td>
+                        <img class="gh_img_icon" src="/{{ .FunctionalPath }}/static/icons/Gatehouse.png">
+                    </td>
+                </tr>
                 <tr>
                     <td class="gh_str_title">{{ .FormTitle }}</td>
                 </tr>

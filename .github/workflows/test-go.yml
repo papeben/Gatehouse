@@ -35,6 +35,7 @@ jobs:
         MYSQL_USER: root
         MYSQL_PASS: testing
         SMTP_PORT: 1025
+        LOG_LEVEL: 1
 
   Code_Quality:
     runs-on: ubuntu-latest

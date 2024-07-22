@@ -98,7 +98,10 @@ func TestGenerateUserID(t *testing.T) {
 	defer db.Close()
 
 	// Test generating a new user ID
-	newID := GenerateUserID()
+	newID, err := GenerateUserID()
+	if err != nil {
+		panic(err)
+	}
 	if len(newID) != 8 {
 		t.Errorf("Generated ID has incorrect length. Expected 8, got %d", len(newID))
 	}
@@ -115,7 +118,10 @@ func TestGenerateUserID(t *testing.T) {
 
 func TestGenerateSessionToken(t *testing.T) {
 	t.Run("should generate unique session token", func(t *testing.T) {
-		token := GenerateSessionToken()
+		token, err := GenerateSessionToken()
+		if err != nil {
+			panic(err)
+		}
 		if token == "" {
 			t.Errorf("expected non-empty session token, but got %q", token)
 		}
@@ -129,7 +135,10 @@ func TestGenerateSessionToken(t *testing.T) {
 
 func TestGenerateResetToken(t *testing.T) {
 	t.Run("should generate unique reset token", func(t *testing.T) {
-		token := GenerateResetToken()
+		token, err := GenerateResetToken()
+		if err != nil {
+			panic(err)
+		}
 		if token == "" {
 			t.Errorf("expected non-empty token, but got %q", token)
 		}
@@ -143,7 +152,10 @@ func TestGenerateResetToken(t *testing.T) {
 
 func TestGenerateMfaSessionToken(t *testing.T) {
 	t.Run("should generate unique sesson token", func(t *testing.T) {
-		token := GenerateMfaSessionToken()
+		token, err := GenerateMfaSessionToken()
+		if err != nil {
+			panic(err)
+		}
 		if token == "" {
 			t.Errorf("expected non-empty token, but got %q", token)
 		}
@@ -157,7 +169,10 @@ func TestGenerateMfaSessionToken(t *testing.T) {
 
 func TestGenerateConfirmationToken(t *testing.T) {
 	t.Run("should generate unique confirmation token", func(t *testing.T) {
-		token := GenerateEmailConfirmationToken()
+		token, err := GenerateEmailConfirmationToken()
+		if err != nil {
+			panic(err)
+		}
 		if token == "" {
 			t.Errorf("expected non-empty token, but got %q", token)
 		}

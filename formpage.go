@@ -160,6 +160,19 @@ func FormCreateHint(text string) GatehouseFormElement {
 		"",
 	}
 }
+func FormCreateSmallHint(text string) GatehouseFormElement {
+	return GatehouseFormElement{
+		"gh_div_smallhint",
+		text,
+		false,
+		"",
+		false,
+		false,
+		"",
+		"",
+		"",
+	}
+}
 func FormCreateQR(b64Data string) GatehouseFormElement {
 	return GatehouseFormElement{
 		"gh_img_qr",
@@ -170,6 +183,20 @@ func FormCreateQR(b64Data string) GatehouseFormElement {
 		true,
 		"",
 		"",
+		"",
+	}
+}
+
+func FormCreateUploadInput(name string, text string) GatehouseFormElement {
+	return GatehouseFormElement{
+		"gh_inp_upload",
+		text,
+		false,
+		"",
+		true,
+		false,
+		"file",
+		name,
 		"",
 	}
 }
@@ -415,6 +442,59 @@ var (
 		functionalPath,
 	}
 
+	avatarChangePage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Change Your Avatar",
+		"Change Your Avatar",
+		"/" + functionalPath + "/submit/changeavatar",
+		"POST",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Upload your new avatar:"),
+			FormCreateUploadInput("avatarupload", "Select Image"),
+			FormCreateSmallHint("JPG or PNG formats supported. Max 5MB"),
+			FormCreateDivider(),
+			FormCreateSubmitInput("submit", "Upload"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	avatarChangedPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Success",
+		"Avatar changed",
+		"",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Your avatar has been changed successfully."),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Manage Account"),
+			FormCreateDivider(),
+			FormCreateButtonLink("/"+functionalPath+"/", "Back To Site"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
+	avatarInvalidPage GatehouseForm = GatehouseForm{ // Define forgot password page
+		appName + " - Invalid Image",
+		"Invalid Image",
+		"",
+		"GET",
+		[]GatehouseFormElement{
+			FormCreateDivider(),
+			FormCreateHint("Your uploaded image was not supported."),
+			FormCreateHint("Make sure the image is a supported format and below 5MB in size."),
+			FormCreateButtonLink("/"+functionalPath+"/changeavatar", "Try Again"),
+			FormCreateDivider(),
+			FormCreateButtonLink("/"+functionalPath+"/manage", "Manage Account"),
+			FormCreateDivider(),
+		},
+		[]OIDCButton{},
+		functionalPath,
+	}
+
 	mfaEmailPage GatehouseForm = GatehouseForm{ // Define forgot password page
 		appName + " - MFA",
 		"MFA Code Sent",
@@ -462,22 +542,6 @@ var (
 			FormCreateHint("Enter the code below:"),
 			FormCreateTextInput("token", "00000000"),
 			FormCreateSubmitInput("submit", "Submit"),
-			FormCreateDivider(),
-		},
-		[]OIDCButton{},
-		functionalPath,
-	}
-
-	areYouSurePage GatehouseForm = GatehouseForm{ // Define forgot password page
-		appName + " - Confirm",
-		"Confirm Action",
-		"/" + functionalPath + "/submit/needstobereplaced",
-		"POST",
-		[]GatehouseFormElement{
-			FormCreateDivider(),
-			FormCreateHint("Are you sure you wish to proceed?"),
-			FormCreateSubmitInput("submit", "Yes"),
-			FormCreateButtonLink("/"+functionalPath+"/manage", "No, take me back!"),
 			FormCreateDivider(),
 		},
 		[]OIDCButton{},
