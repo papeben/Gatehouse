@@ -934,6 +934,8 @@ func TestPageRequests(t *testing.T) {
 		{"/gatehouse/changeusername", false, false, false, false, 303},
 		{"/gatehouse/changeusername", true, false, false, true, 303},
 		{"/gatehouse/changeusername", true, true, false, true, 200},
+		{"/gatehouse/changeavatar", true, false, false, true, 200},
+		{"/gatehouse/changeavatar", false, false, false, true, 303},
 		{"/gatehouse/deleteaccount", false, false, false, false, 303},
 		{"/gatehouse/deleteaccount", true, false, false, true, 303},
 		{"/gatehouse/deleteaccount", true, true, false, true, 200},
@@ -1006,6 +1008,7 @@ func TestPageDatabaseFailure(t *testing.T) {
 		{"/gatehouse/changeusername", false, false, false, false, 303},
 		{"/gatehouse/changeusername", true, false, false, true, 500},
 		{"/gatehouse/changeusername", true, true, false, true, 500},
+		{"/gatehouse/changeavatar", true, false, false, true, 500},
 		{"/gatehouse/deleteaccount", false, false, false, false, 303},
 		{"/gatehouse/deleteaccount", true, false, false, true, 500},
 		{"/gatehouse/deleteaccount", true, true, false, true, 500},
@@ -1053,6 +1056,7 @@ func TestDisabledFeatureRequests(t *testing.T) {
 		{"/gatehouse/removemfa", true, false, false, true, 410},
 		{"/gatehouse/changeemail", false, false, false, false, 410},
 		{"/gatehouse/changeusername", false, false, false, false, 410},
+		{"/gatehouse/changeavatar", false, false, false, false, 410},
 		{"/gatehouse/deleteaccount", false, false, false, false, 410},
 		{"/gatehouse/recoverycode", false, false, false, false, 410},
 		{"/gatehouse/revokesessions", false, false, false, false, 410},
@@ -1066,6 +1070,7 @@ func TestDisabledFeatureRequests(t *testing.T) {
 	allowEmailChange = false
 	allowDeleteAccount = false
 	allowSessionRevoke = false
+	allowAvatarChange = false
 
 	var responseCode int
 	for _, p := range reqPermutations {
@@ -1077,14 +1082,15 @@ func TestDisabledFeatureRequests(t *testing.T) {
 		})
 	}
 
-	allowRegistration     = envWithDefaultBool("ALLOW_REGISTRATION", true)
-	allowUsernameLogin    = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
-	allowPasswordReset    = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
-	allowMobileMFA        = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
-	allowUsernameChange   = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
-	allowEmailChange      = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
-	allowDeleteAccount    = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
-	allowSessionRevoke    = envWithDefaultBool("ALLOW_SESSION_REVOKE", true)
+	allowRegistration = envWithDefaultBool("ALLOW_REGISTRATION", true)
+	allowUsernameLogin = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
+	allowPasswordReset = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
+	allowMobileMFA = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
+	allowUsernameChange = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
+	allowEmailChange = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
+	allowDeleteAccount = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
+	allowSessionRevoke = envWithDefaultBool("ALLOW_SESSION_REVOKE", true)
+	allowAvatarChange = envWithDefaultBool("ALLOW_AVATAR_CHANGE", true)
 }
 
 func TestPostRequests(t *testing.T) {
@@ -1117,28 +1123,28 @@ func TestPostRequests(t *testing.T) {
 	}
 
 	var reqPermutations = []struct {
-		path                string
-		sessionToken        string
-		elevatedToken       string
-		MFAToken            string
-		expectedCode        int
-		formValues          []formFields
+		path          string
+		sessionToken  string
+		elevatedToken string
+		MFAToken      string
+		expectedCode  int
+		formValues    []formFields
 	}{
 		{"/gatehouse/submit/login", "", "", "", 303, []formFields{{"username", username}, {"password", password}}},
 		{"/gatehouse/submit/login", "", "", "", 400, []formFields{{"username", ""}, {"password", password}}},
 		{"/gatehouse/submit/login", "", "", "", 400, []formFields{{"username", username}, {"password", ""}}},
 		{"/gatehouse/submit/login", "", "", "", 303, []formFields{{"username", username}, {"password", "NotCorrectPW"}}},
 		{"/gatehouse/submit/login", "", "", "", 303, []formFields{{"username", username}, {"password", "NotCorrectPW"}}},
-		{"/gatehouse/submit/register", "", "", "", 400, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", ""}, {"passwordConfirm", ""}, {"email", GenerateRandomString(16)+"@testing.local"}}},
-		{"/gatehouse/submit/register", "", "", "", 400, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", "NotMatching"}, {"email", GenerateRandomString(16)+"@testing.local"}}},
-		{"/gatehouse/submit/register", "", "", "", 400, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@invalid"}}},
-		{"/gatehouse/submit/register", "", "", "", 303, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/register", "", "", "", 400, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", ""}, {"passwordConfirm", ""}, {"email", GenerateRandomString(16) + "@testing.local"}}},
+		{"/gatehouse/submit/register", "", "", "", 400, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", "NotMatching"}, {"email", GenerateRandomString(16) + "@testing.local"}}},
+		{"/gatehouse/submit/register", "", "", "", 400, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16) + "@invalid"}}},
+		{"/gatehouse/submit/register", "", "", "", 303, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16) + "@testing.local"}}},
 		{"/gatehouse/submit/mfa", "", "", mfaSession, 303, []formFields{{"token", "123456"}}},
 		{"/gatehouse/submit/validatemfa", sessionToken, "", "", 400, []formFields{{"otp", "123456"}}},
 		{"/gatehouse/submit/elevate?t=changeusername", sessionToken, "", "", 303, []formFields{{"password", password}}},
 		{"/gatehouse/submit/elevate?t=changeusername", sessionToken, "", "", 303, []formFields{{"password", password}}},
 		{"/gatehouse/submit/removemfa", sessionToken, elevatedSession, "", 400, []formFields{{"password", password}}},
-		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 200, []formFields{{"newemail", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 200, []formFields{{"newemail", GenerateRandomString(16) + "@testing.local"}}},
 		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 400, []formFields{{"newUsername", "invalid%username"}}},
 		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 400, []formFields{{"newUsername", GenerateRandomString(8)}}},
 		{"/gatehouse/submit/recoverycode", "", "", mfaSession, 303, []formFields{{"token", "123456"}}},
@@ -1176,21 +1182,21 @@ func TestPostDatabaseFailure(t *testing.T) {
 	db.Close()
 
 	var reqPermutations = []struct {
-		path                string
-		sessionToken        string
-		elevatedToken       string
-		MFAToken            string
-		expectedCode        int
-		formValues          []formFields
+		path          string
+		sessionToken  string
+		elevatedToken string
+		MFAToken      string
+		expectedCode  int
+		formValues    []formFields
 	}{
 		{"/gatehouse/submit/login", sessionToken, "", "", 500, []formFields{{"username", username}, {"password", password}}},
-		{"/gatehouse/submit/register", sessionToken, "", "", 500, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/register", sessionToken, "", "", 500, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16) + "@testing.local"}}},
 		{"/gatehouse/submit/mfa", sessionToken, "", mfaSession, 500, []formFields{{"token", "123456"}}},
 		{"/gatehouse/submit/validatemfa", sessionToken, "", "", 500, []formFields{{"otp", "123456"}}},
 		{"/gatehouse/submit/elevate?t=changeusername", sessionToken, "", "", 500, []formFields{{"password", password}}},
 		{"/gatehouse/submit/elevate?t=changeusername", sessionToken, "", "", 500, []formFields{{"password", password}}},
 		{"/gatehouse/submit/removemfa", sessionToken, elevatedSession, "", 500, []formFields{{"password", password}}},
-		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 500, []formFields{{"newemail", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 500, []formFields{{"newemail", GenerateRandomString(16) + "@testing.local"}}},
 		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 500, []formFields{{"newUsername", GenerateRandomString(8)}}},
 		{"/gatehouse/submit/recoverycode", "", "", mfaSession, 500, []formFields{{"token", "123456"}}},
 		{"/gatehouse/submit/revokesessions", sessionToken, elevatedSession, "", 500, []formFields{{"token", "123456"}}},
@@ -1238,20 +1244,19 @@ func TestPostDisabledFeatures(t *testing.T) {
 		panic(err)
 	}
 
-
 	var reqPermutations = []struct {
-		path                string
-		sessionToken        string
-		elevatedToken       string
-		MFAToken            string
-		expectedCode        int
-		formValues          []formFields
+		path          string
+		sessionToken  string
+		elevatedToken string
+		MFAToken      string
+		expectedCode  int
+		formValues    []formFields
 	}{
 		{"/gatehouse/submit/login", "", "", "", 410, []formFields{{"username", username}, {"password", password}}},
-		{"/gatehouse/submit/register", "", "", "", 410, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/register", "", "", "", 410, []formFields{{"newUsername", GenerateRandomString(8)}, {"password", password}, {"passwordConfirm", password}, {"email", GenerateRandomString(16) + "@testing.local"}}},
 		{"/gatehouse/submit/mfa", "", "", mfaSession, 303, []formFields{{"token", "123456"}}},
 		{"/gatehouse/submit/validatemfa", sessionToken, "", "", 410, []formFields{{"otp", "123456"}}},
-		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 410, []formFields{{"newemail", GenerateRandomString(16)+"@testing.local"}}},
+		{"/gatehouse/submit/changeemail", sessionToken, elevatedSession, "", 410, []formFields{{"newemail", GenerateRandomString(16) + "@testing.local"}}},
 		{"/gatehouse/submit/changeusername", sessionToken, elevatedSession, "", 410, []formFields{{"newUsername", GenerateRandomString(8)}}},
 		{"/gatehouse/submit/recoverycode", "", "", mfaSession, 410, []formFields{{"token", "123456"}}},
 		{"/gatehouse/submit/revokesessions", sessionToken, elevatedSession, "", 410, []formFields{{"token", "123456"}}},
@@ -1270,12 +1275,12 @@ func TestPostDisabledFeatures(t *testing.T) {
 		})
 	}
 
-	allowRegistration     = envWithDefaultBool("ALLOW_REGISTRATION", true)
-	allowUsernameLogin    = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
-	allowPasswordReset    = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
-	allowMobileMFA        = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
-	allowUsernameChange   = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
-	allowEmailChange      = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
-	allowDeleteAccount    = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
-	allowSessionRevoke    = envWithDefaultBool("ALLOW_SESSION_REVOKE", true)
+	allowRegistration = envWithDefaultBool("ALLOW_REGISTRATION", true)
+	allowUsernameLogin = envWithDefaultBool("ALLOW_USERNAME_LOGIN", true)
+	allowPasswordReset = envWithDefaultBool("ALLOW_PASSWORD_RESET", true)
+	allowMobileMFA = envWithDefaultBool("ALLOW_MOBILE_MFA", true)
+	allowUsernameChange = envWithDefaultBool("ALLOW_USERNAME_CHANGE", true)
+	allowEmailChange = envWithDefaultBool("ALLOW_EMAIL_CHANGE", true)
+	allowDeleteAccount = envWithDefaultBool("ALLOW_DELETE_ACCOUNT", true)
+	allowSessionRevoke = envWithDefaultBool("ALLOW_SESSION_REVOKE", true)
 }
