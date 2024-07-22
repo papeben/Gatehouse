@@ -8,6 +8,7 @@ function initGatehouse(){
     initPasswordConf()
     initNewUsername()
     initEmail()
+    initUsernameDisplay()
     checkForError()
 }
 
@@ -96,6 +97,21 @@ function initNewUsername(){ // If new username field, validate it
             usernameInput.style.border = null
         })
 
+    }
+}
+
+function initUsernameDisplay(){
+    if (document.getElementById("username")){
+        fetch(`/gatehouse/myusername`, {
+            method: 'GET',
+            headers: { 'Accept': 'text/html' }
+        })
+        .then(async response => {
+            if (response.status === 200) {
+                removeInputError("newUsername")
+                document.getElementById("username").innerHTML = await response.text()
+            }
+        })
     }
 }
 

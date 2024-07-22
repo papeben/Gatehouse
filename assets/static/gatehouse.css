@@ -157,3 +157,26 @@ body {
     width: 20px;
     margin-top: 3px;
 }
+.gh_img_avatar {
+    position: absolute;
+    left: -150px;
+    top: 70px;
+    width: 140px;
+    height: 140px;
+    border-radius: 10px;
+    box-shadow: 1px 1px 3px #000;
+    object-fit: cover;
+}
+.gh_div_username {
+    position: absolute;
+    left: -150px;
+    top: 220px;
+    background-color: #fff;
+    padding: 10px 10px;
+    border-radius: 10px;
+    width: 120px;
+    box-shadow: 1px 1px 3px #000;
+    text-align: left;
+    overflow-x: hidden;
+    text-overflow: ellipsis;
+}
