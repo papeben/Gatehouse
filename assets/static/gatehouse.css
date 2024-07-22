@@ -9,7 +9,7 @@ body {
     top: 50%;
     padding: 20px;
     border-radius: 10px;
-    box-shadow: 1px 1px 6px #888;
+    box-shadow: 1px 1px 6px #000;
     transform: translate(-50%, -50%);
     background-color: #ffffff;
 }
@@ -22,18 +22,20 @@ body {
     width: 264px;
     padding: 17px 17px;
     border: 0px solid transparent;
-    box-shadow: inset 1px 1px 3px #888;
+    box-shadow: inset 1px 1px 3px #000;
     font-size: 16px;
     outline: none;
     border: 1px solid white;
+    border-radius: 5px;
 }
 .gh_inp_button {
     width: 300px;
     padding: 18px 18px;
     border: 0px solid transparent;
-    box-shadow: 1px 1px 3px #888;
+    box-shadow: 1px 1px 3px #000;
     font-size: 16px;
     background-color: white;
+    border-radius: 5px;
 }
 .gh_inp_button:hover {
     cursor: pointer;
@@ -51,11 +53,12 @@ body {
     display: block;
     width: 264px;
     padding: 18px 18px;
-    box-shadow: 1px 1px 3px #888;
+    box-shadow: 1px 1px 3px #000;
     line-height: 20px;
     font-size: 16px;
     text-decoration: none;
     color: black;
+    border-radius: 5px;
 }
 .gh_a_button:hover {
     cursor: pointer;
@@ -93,16 +96,32 @@ body {
 }
 .gh_div_err {
     position: absolute;
-    padding: 18px 10px;
-    line-height: 20px;
+    padding: 12px 15px 12px 10px;
+    line-height: 16px;
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
+    background-color: white;
+    box-shadow: 1px 1px 3px #000;
+    clip-path: inset(-5px -5px -5px 1px);
+    white-space: nowrap;
+    z-index: 5;
+}
+.gh_div_err_leader {
+    position: absolute;
+    height: 1px;
+    width: 25px;
+    background-color: red;
+    z-index: 10;
 }
 .gh_div_err_top {
     position: absolute;
-    padding: 18px 0px;
+    padding: 14px 0px;
     line-height: 20px;
     text-align: center;
-    border: 1px solid red;
+    border: 3px solid red;
     border-radius: 5px;
+    background-color: #fff;
+    box-shadow: 1px 1px 3px #000;
 }
 .gh_img_qr {
     width: 180px;
@@ -113,6 +132,6 @@ body {
 .gh_img_icon {
     width: 60px;
     height: 60px;
-    margin: 20px 120px 0px 120px;
+    margin: 20px 120px 10px 120px;
     text-align: center;
 }

@@ -146,26 +146,39 @@ function createInputError(inputName, message, color="red"){
     if (document.getElementsByName(inputName)[0]){
         removeInputError(inputName)
 
+        var targetForm = document.getElementsByTagName("form")[0]
+        let tx = targetForm.getBoundingClientRect().left
+        let ty = targetForm.getBoundingClientRect().top
+
         var targetInput = document.getElementsByName(inputName)[0]
-        let x = targetInput.getBoundingClientRect().left
-        let y = targetInput.getBoundingClientRect().top
-        let w = targetInput.getBoundingClientRect().width
+        let x = targetInput.getBoundingClientRect().left + targetInput.getBoundingClientRect().width - tx
+        let y = targetInput.getBoundingClientRect().top - ty
+        let h = targetInput.getBoundingClientRect().height
 
         let msgFrame = document.createElement("div")
         msgFrame.classList.add("gh_div_err")
         msgFrame.id = `${inputName}-err`
-        msgFrame.style.left = String(x + w + 40) + "px"
-        msgFrame.style.top = String(y) + "px"
+        msgFrame.style.left = String(x + 21) + "px"
+        msgFrame.style.top = String(y + 8) + "px"
         msgFrame.innerHTML = message
-        msgFrame.style.borderLeft = `5px solid ${color}`
 
-        document.getElementsByTagName("body")[0].appendChild(msgFrame)
+        targetForm.appendChild(msgFrame)
+
+        let msgLeaderLine = document.createElement("div")
+        msgLeaderLine.id = `${inputName}-err-leader`
+        msgLeaderLine.style.left = String(x) + "px"
+        msgLeaderLine.style.top = String(y + (h/2)) + "px"
+        msgLeaderLine.classList.add("gh_div_err_leader")
+        targetForm.appendChild(msgLeaderLine)
     }
 }
 
 function removeInputError(inputName){
     if (document.getElementById(`${inputName}-err`)){
         document.getElementById(`${inputName}-err`).remove()
+    }
+    if (document.getElementById(`${inputName}-err-leader`)){
+        document.getElementById(`${inputName}-err-leader`).remove()
     }
 }
 
