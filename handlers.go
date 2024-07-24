@@ -49,6 +49,14 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
 		proxied = "Redirected"
 	} else {
+		if jwtSecret != "" {
+			jwt, err := CreateJWT(userId)
+			fmt.Println(jwt)
+			if err != nil {
+				ServeErrorPage(response, err)
+				return
+			}
+		}
 		proxy.ServeHTTP(response, request)
 	}
 

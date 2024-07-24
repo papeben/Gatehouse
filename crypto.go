@@ -4,8 +4,12 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1" /* #nosec G505 */
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base32"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -207,4 +211,53 @@ func GenerateEmailConfirmationToken() (string, error) {
 		newToken, err = GenerateEmailConfirmationToken()
 		return strings.ToLower(newToken), err
 	}
+}
+
+func CreateJWT(userId string) (string, error) {
+
+	var (
+		username       string
+		email          string
+		emailConfirmed bool
+		avatarURL      string
+	)
+	err := db.QueryRow(fmt.Sprintf("SELECT username, email, email_confirmed, avatar_url FROM %s_accounts WHERE id = ?", tablePrefix), userId).Scan(&username, &email, &emailConfirmed, &avatarURL)
+	if err != nil {
+		return "", err
+	}
+
+	var header = map[string]string{
+		"alg": "HS256",
+		"typ": "JWT",
+	}
+	headerBytes, err := json.Marshal(header)
+
+	emailConfirmedString := "false"
+	if emailConfirmed {
+		emailConfirmedString = "true"
+	}
+
+	var payload = map[string]string{
+		"iss":            "Gatehouse",
+		"sub":            userId,
+		"name":           username,
+		"nickname":       username,
+		"iat":            "now",
+		"email":          email,
+		"email_verified": emailConfirmedString,
+		"picture":        avatarURL,
+	}
+	payloadBytes, err := json.Marshal(payload)
+
+	mac := hmac.New(sha256.New, []byte(jwtSecret))
+	_, err = mac.Write(append(append(headerBytes, []byte(".")...), payloadBytes...))
+	if err != nil {
+		return "", err
+	}
+
+	headerString := base64.URLEncoding.EncodeToString(headerBytes)
+	payloadString := base64.URLEncoding.EncodeToString(payloadBytes)
+	signature := base64.URLEncoding.EncodeToString([]byte(hex.EncodeToString(mac.Sum(nil))))
+
+	return headerString + "." + payloadString + "." + signature, nil
 }

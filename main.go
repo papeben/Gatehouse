@@ -65,6 +65,7 @@ var (
 	enableLoginAlerts     bool     = envWithDefaultBool("ENABLE_LOGIN_ALERTS", true)
 	enableMFAAlerts       bool     = envWithDefaultBool("ENABLE_MFA_ALERTS", true)
 	publicPages           string   = envWithDefault("PUBLIC_PAGES", "")
+	jwtSecret             string   = envWithDefault("JWT_SECRET", "")
 	publicPageList        []string = strings.Split(publicPages, ",")
 )
 
