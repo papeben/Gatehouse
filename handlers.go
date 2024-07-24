@@ -39,18 +39,15 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 	if handler != nil {
 		response.Header().Set("Cache-Control", "no-store")
 		handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
-		proxied = "Served"
 	} else if strings.HasPrefix(request.URL.Path, "/"+functionalPath+"/avatar/") {
 		HandleAvatar(response, request)
 		proxied = "Served"
 	} else if requireEmailConfirm && validSession && !emailConfirmed {
 		http.Redirect(response, request, "/"+functionalPath+"/confirmemail", http.StatusSeeOther)
 		proxied = "Redirected"
-	} else if requireAuthentication && !validSession && !sliceContainsPath(publicPageList, request.URL.Path) {
+	} else if requireAuthentication && !validSession && !sliceContainsPath(publicPageList, request.URL.Path) && !(request.URL.Path == "/" && sliceContainsPath(publicPageList, "//")) {
 		http.Redirect(response, request, path.Join("/", functionalPath, "login"), http.StatusSeeOther)
 		proxied = "Redirected"
-	} else if request.URL.Path == "/" && sliceContainsPath(publicPageList, "//") {
-		proxy.ServeHTTP(response, request)
 	} else {
 		proxy.ServeHTTP(response, request)
 	}
