@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"encoding/base32"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -263,7 +262,6 @@ func CreateHMAC256(message, key string) string {
 	h := hmac.New(sha256.New, keyBytes)
 	h.Write(messageBytes)
 	hashBytes := h.Sum(nil)
-	hashString := hex.EncodeToString(hashBytes)
 
-	return hashString
+	return base64.RawURLEncoding.EncodeToString(hashBytes)
 }
