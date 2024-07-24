@@ -249,15 +249,21 @@ func CreateJWT(userId string) (string, error) {
 	}
 	payloadBytes, err := json.Marshal(payload)
 
-	mac := hmac.New(sha256.New, []byte(jwtSecret))
-	_, err = mac.Write(append(append(headerBytes, []byte(".")...), payloadBytes...))
-	if err != nil {
-		return "", err
-	}
+	headerString := base64.RawURLEncoding.EncodeToString(headerBytes)
+	payloadString := base64.RawURLEncoding.EncodeToString(payloadBytes)
 
-	headerString := base64.URLEncoding.EncodeToString(headerBytes)
-	payloadString := base64.URLEncoding.EncodeToString(payloadBytes)
-	signature := base64.URLEncoding.EncodeToString([]byte(hex.EncodeToString(mac.Sum(nil))))
+	signature := CreateHMAC256(headerString+"."+payloadString, jwtSecret)
 
 	return headerString + "." + payloadString + "." + signature, nil
+}
+
+func CreateHMAC256(message, key string) string {
+	keyBytes := []byte(key)
+	messageBytes := []byte(message)
+	h := hmac.New(sha256.New, keyBytes)
+	h.Write(messageBytes)
+	hashBytes := h.Sum(nil)
+	hashString := hex.EncodeToString(hashBytes)
+
+	return hashString
 }
