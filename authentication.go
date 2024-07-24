@@ -24,27 +24,32 @@ func AuthenticateRequestor(response http.ResponseWriter, request *http.Request, 
 	_, err = db.Exec(fmt.Sprintf("INSERT INTO %s_sessions (session_token, user_id) VALUES (?, ?)", tablePrefix), token, userID)
 	if err != nil {
 		ServeErrorPage(response, err)
-	} else {
-		cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
-		http.SetCookie(response, &cookie)
-		http.Redirect(response, request, "/", http.StatusSeeOther)
+		return
+	}
 
-		if enableLoginAlerts {
-			var (
-				username string
-				email    string
-			)
-			err = db.QueryRow(fmt.Sprintf("SELECT email, username FROM %s_accounts WHERE id = ?", tablePrefix), userID).Scan(&email, &username)
+	cookie := http.Cookie{Name: sessionCookieName, Value: token, SameSite: http.SameSiteStrictMode, Secure: false, Path: "/"}
+	http.SetCookie(response, &cookie)
+
+	if enableLoginAlerts {
+		var (
+			username       string
+			email          string
+			emailConfirmed bool
+		)
+		err = db.QueryRow(fmt.Sprintf("SELECT email, username, email_confirmed FROM %s_accounts WHERE id = ?", tablePrefix), userID).Scan(&email, &username, &emailConfirmed)
+		if err != nil {
+			ServeErrorPage(response, err)
+			return
+		} else if emailConfirmed {
+			err = sendMail(email, "Sign In - New Device", username, "A new device has signed in to your account.<br><br>If this was you, there's nothing you need to do. Otherwise, please change your password immediately.", "", "")
 			if err != nil {
-				ServeErrorPage(response, err)
-			} else {
-				err = sendMail(email, "Sign In - New Device", username, "A new device has signed in to your account.<br><br>If this was you, there's nothing you need to do. Otherwise, please change your password immediately.", "", "")
-				if err != nil {
-					logMessage(3, fmt.Sprintf("User %s was not notified of new device sign in.", username))
-				}
+				logMessage(3, fmt.Sprintf("User %s was not notified of new device sign in.", username))
 			}
 		}
 	}
+
+	http.Redirect(response, request, "/", http.StatusSeeOther)
+
 }
 
 func IsValidSession(sessionToken string) (bool, error) {
