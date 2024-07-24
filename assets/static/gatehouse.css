@@ -21,25 +21,34 @@ body {
 .gh_inp_text {
     width: 264px;
     padding: 17px 17px;
-    border: 0px solid transparent;
-    box-shadow: inset 1px 1px 3px #000;
+    background-color: #f1f1f1;
     font-size: 16px;
     outline: none;
     border: 1px solid white;
-    border-radius: 5px;
+    border-radius: 10px;
+}
+.gh_inp_text:hover {
+    background-color: #e5e5e5;
 }
 .gh_inp_button {
     width: 300px;
     padding: 18px 18px;
     border: 0px solid transparent;
-    box-shadow: 1px 1px 3px #000;
     font-size: 16px;
     background-color: white;
-    border-radius: 5px;
+    border-radius: 10px;
 }
 .gh_inp_button:hover {
     cursor: pointer;
     background-color: #f1f1f1;
+}
+.gh_a_primary_button {
+    background-color: #40b700;
+    color: white;
+    font-weight: bold;
+}
+.gh_a_primary_button:hover {
+    background-color: #3aa201;
 }
 .gh_inp_checkbox {
     display: inline;
@@ -52,24 +61,27 @@ body {
 .gh_a_button {
     display: block;
     width: 264px;
-    padding: 18px 18px;
-    box-shadow: 1px 1px 3px #000;
+    padding: 17px 17px;
+    border: 1px solid #ccc;
     line-height: 20px;
     font-size: 16px;
     text-decoration: none;
     color: black;
-    border-radius: 5px;
+    border-radius: 10px;
 }
 .gh_a_button:hover {
     cursor: pointer;
     background-color: #f1f1f1;
+    border: 1px solid #f1f1f1;
 }
 .gh_a_danger_button {
     color: red;
+    border: 1px solid red;
 }
 .gh_a_danger_button:hover {
     cursor: pointer;
     background-color: red;
+    border: 1px solid red;
     color: white;
 }
 .gh_a_icon {

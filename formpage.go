@@ -71,7 +71,7 @@ func FormCreatePasswordInput(name string, placeholder string) GatehouseFormEleme
 }
 func FormCreateSubmitInput(name string, text string) GatehouseFormElement {
 	return GatehouseFormElement{
-		"gh_inp_button",
+		"gh_a_primary_button gh_inp_button",
 		text,
 		false,
 		"",
