@@ -39,6 +39,7 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 	if handler != nil {
 		response.Header().Set("Cache-Control", "no-store")
 		handler.(func(http.ResponseWriter, *http.Request))(response, request) // If handler function set, use it to handle http request
+		proxied = "Served"
 	} else if strings.HasPrefix(request.URL.Path, "/"+functionalPath+"/avatar/") {
 		HandleAvatar(response, request)
 		proxied = "Served"
