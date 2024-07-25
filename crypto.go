@@ -213,7 +213,6 @@ func GenerateEmailConfirmationToken() (string, error) {
 }
 
 func CreateJWT(userId string) (string, error) {
-
 	var (
 		username       string
 		email          string
@@ -230,12 +229,14 @@ func CreateJWT(userId string) (string, error) {
 		"typ": "JWT",
 	}
 	headerBytes, err := json.Marshal(header)
+	if err != nil {
+		return "", err
+	}
 
 	emailConfirmedString := "false"
 	if emailConfirmed {
 		emailConfirmedString = "true"
 	}
-
 	var payload = map[string]string{
 		"iss":            "Gatehouse",
 		"sub":            userId,
@@ -247,13 +248,14 @@ func CreateJWT(userId string) (string, error) {
 		"picture":        avatarURL,
 	}
 	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
 
 	headerString := base64.RawURLEncoding.EncodeToString(headerBytes)
 	payloadString := base64.RawURLEncoding.EncodeToString(payloadBytes)
-
 	signature := CreateHMAC256(headerString+"."+payloadString, jwtSecret)
-
-	return headerString + "." + payloadString + "." + signature, nil
+	return fmt.Sprintf("%s.%s.%s", headerString, payloadString, signature), nil
 }
 
 func CreateHMAC256(message, key string) string {

@@ -51,11 +51,11 @@ func HandleMain(response http.ResponseWriter, request *http.Request) { // Create
 	} else {
 		if jwtSecret != "" {
 			jwt, err := CreateJWT(userId)
-			fmt.Println(jwt)
 			if err != nil {
 				ServeErrorPage(response, err)
 				return
 			}
+			request.Header.Add("Authorization", "Bearer "+jwt)
 		}
 		proxy.ServeHTTP(response, request)
 	}
