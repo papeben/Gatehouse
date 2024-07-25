@@ -24,7 +24,7 @@ jobs:
         image: docker.io/library/nginx:latest
         options: --health-cmd "echo 'skip'" --health-interval 10s --health-timeout 5s --health-retries 5
         ports:
-          - 9000:9000
+          - 9000:80
     steps:
     - name: Check out repository code
       uses: actions/checkout@v3
