@@ -24,6 +24,7 @@ func init() {
 	InitDatabase(1)
 	LoadTemplates()
 	LoadFuncionalURIs()
+	initProxy()
 }
 
 func sendGetRequest(path string, withValidSession bool, withValidCriticalSession bool, withValidMFASession bool, emailVerified bool) (int, *bytes.Buffer) {
@@ -893,6 +894,7 @@ func TestPageRequests(t *testing.T) {
 	}{
 		{"/", false, false, false, false, 303},
 		{"/", true, false, false, false, 303},
+		{"/", true, false, false, true, 200},
 		{"/gatehouse/login", true, false, false, true, 303},
 		{"/gatehouse/login", false, false, false, false, 200},
 		{"/gatehouse/register", true, false, false, true, 200},
@@ -934,6 +936,11 @@ func TestPageRequests(t *testing.T) {
 		{"/gatehouse/changeusername", true, true, false, true, 200},
 		{"/gatehouse/changeavatar", true, false, false, true, 200},
 		{"/gatehouse/changeavatar", false, false, false, true, 303},
+		{"/gatehouse/myavatar", false, false, false, true, 404},
+		{"/gatehouse/myavatar", true, false, false, true, 303},
+		{"/gatehouse/avatar/test.jpg", true, false, false, true, 404},
+		{"/gatehouse/myusername", false, false, false, true, 404},
+		{"/gatehouse/myusername", true, false, false, true, 200},
 		{"/gatehouse/deleteaccount", false, false, false, false, 303},
 		{"/gatehouse/deleteaccount", true, false, false, true, 303},
 		{"/gatehouse/deleteaccount", true, true, false, true, 200},
@@ -1007,6 +1014,11 @@ func TestPageDatabaseFailure(t *testing.T) {
 		{"/gatehouse/changeusername", true, false, false, true, 500},
 		{"/gatehouse/changeusername", true, true, false, true, 500},
 		{"/gatehouse/changeavatar", true, false, false, true, 500},
+		{"/gatehouse/myavatar", false, false, false, true, 404},
+		{"/gatehouse/myavatar", true, false, false, true, 500},
+		{"/gatehouse/avatar/test.jpg", true, false, false, true, 500},
+		{"/gatehouse/myusername", false, false, false, true, 404},
+		{"/gatehouse/myusername", true, false, false, true, 500},
 		{"/gatehouse/deleteaccount", false, false, false, false, 303},
 		{"/gatehouse/deleteaccount", true, false, false, true, 500},
 		{"/gatehouse/deleteaccount", true, true, false, true, 500},

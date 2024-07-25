@@ -20,6 +20,11 @@ jobs:
         options: --health-cmd "echo 'skip'" --health-interval 10s --health-timeout 5s --health-retries 5
         ports:
           - 1025:1025
+      webapp:
+        image: docker.io/library/nginx:latest
+        options: --health-cmd "echo 'skip'" --health-interval 10s --health-timeout 5s --health-retries 5
+        ports:
+          - 9000:80
     steps:
     - name: Check out repository code
       uses: actions/checkout@v3
@@ -36,6 +41,7 @@ jobs:
         MYSQL_PASS: testing
         SMTP_PORT: 1025
         LOG_LEVEL: 1
+        JWT_SECRET: testjwtsecret
 
   Code_Quality:
     runs-on: ubuntu-latest
