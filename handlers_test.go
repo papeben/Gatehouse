@@ -24,6 +24,7 @@ func init() {
 	InitDatabase(1)
 	LoadTemplates()
 	LoadFuncionalURIs()
+	initProxy()
 }
 
 func sendGetRequest(path string, withValidSession bool, withValidCriticalSession bool, withValidMFASession bool, emailVerified bool) (int, *bytes.Buffer) {
@@ -893,6 +894,7 @@ func TestPageRequests(t *testing.T) {
 	}{
 		{"/", false, false, false, false, 303},
 		{"/", true, false, false, false, 303},
+		{"/", true, false, false, true, 200},
 		{"/gatehouse/login", true, false, false, true, 303},
 		{"/gatehouse/login", false, false, false, false, 200},
 		{"/gatehouse/register", true, false, false, true, 200},

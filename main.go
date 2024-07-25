@@ -75,13 +75,8 @@ func main() {
 	defer db.Close()
 	LoadTemplates()
 	LoadFuncionalURIs()
+	initProxy()
 
-	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
-	if err != nil {
-		logMessage(0, fmt.Sprintf("Unable to start listening: %s", err.Error()))
-		os.Exit(1)
-	}
-	proxy = httputil.NewSingleHostReverseProxy(url)
 	staticFiles := http.StripPrefix("/"+functionalPath+"/static/", http.FileServer(http.Dir("./assets/static/")))
 	http.Handle("/"+functionalPath+"/static/", staticFiles) // If /gatehouse/static, use static assets
 	http.HandleFunc("/", HandleMain)
@@ -91,7 +86,7 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	logMessage(4, fmt.Sprintf("Listening for incoming requests on %s", server.Addr))
-	err = server.ListenAndServe()
+	err := server.ListenAndServe()
 	if err != nil {
 		logMessage(0, fmt.Sprintf("Server error: %s", err.Error()))
 	}
@@ -275,6 +270,15 @@ func InitDatabase(n int) {
 
 		CreateDatabaseTable(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_avatars` (`avatar_id` VARCHAR(16) NOT NULL, `format` VARCHAR(8) NOT NULL, `created` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `data` LONGBLOB NOT NULL, PRIMARY KEY (`avatar_id`)) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_bin; ", mysqlDatabase, tablePrefix))
 	}
+}
+
+func initProxy() {
+	url, err := url.Parse("http://" + backendServerAddr + ":" + backendServerPort) // Validate backend URL
+	if err != nil {
+		logMessage(0, fmt.Sprintf("Unable to start listening: %s", err.Error()))
+		os.Exit(1)
+	}
+	proxy = httputil.NewSingleHostReverseProxy(url)
 }
 
 func CreateDatabaseTable(tableSql string) {
